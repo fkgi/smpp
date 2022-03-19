@@ -22,60 +22,48 @@ var DataHandler = func(info BindInfo, body []byte) (uint32, []byte) {
 	return 0, w.Bytes()
 }
 
-func ListenAndServe(addr string) error {
-	l, e := net.Listen("tcp", addr)
-	if e != nil {
-		return e
+func Accept(l net.Listener) (b Bind, e error) {
+	if b.con, e = l.Accept(); e != nil {
+		return
 	}
-	txQ := make(chan command, 10)
-	c, e := l.Accept()
-	for ; e == nil; c, e = l.Accept() {
-		go acceptTransmitter(c, txQ)
-	}
-	return e
-}
 
-func acceptTransmitter(c net.Conn, txQ chan command) (e error) {
-	defer c.Close()
-	info := BindInfo{}
-	info.Address = c.RemoteAddr()
-
-	i, _, n, b, e := readPDU(c)
+	i, _, n, v, e := b.readPDU()
 	if e != nil {
 		return
 	}
 	if i != 0x00000002 {
-		writePDU(c, 0x80000000, 0x00000003, n, nil)
+		b.writePDU(0x80000000, 0x00000003, n, nil)
 		e = errors.New("invalid request")
 		return
 	}
 	i |= 0x80000000
 
 	// verify request
-	buf := bytes.NewBuffer(b)
-	if info.SystemID, e = readCString(buf); e != nil {
+	buf := bytes.NewBuffer(v)
+	if b.SystemID, e = readCString(buf); e != nil {
 		return
 	}
-	if info.Password, e = readCString(buf); e != nil {
+	if b.Password, e = readCString(buf); e != nil {
 		return
 	}
-	if info.SystemType, e = readCString(buf); e != nil {
+	if b.SystemType, e = readCString(buf); e != nil {
 		return
 	}
-	if tmp, e := buf.ReadByte(); e != nil {
-		return e
+	tmp, e := buf.ReadByte()
+	if e != nil {
+		return
 	} else if tmp != 0x34 {
-		writePDU(c, 0x80000000, 0x00000003, n, nil)
+		b.writePDU(0x80000000, 0x00000003, n, nil)
 		e = errors.New("invalid version")
-		return e
-	}
-	if info.TypeOfNumber, e = buf.ReadByte(); e != nil {
 		return
 	}
-	if info.NumberingPlan, e = buf.ReadByte(); e != nil {
+	if b.TypeOfNumber, e = buf.ReadByte(); e != nil {
 		return
 	}
-	if info.AddressRange, e = readCString(buf); e != nil {
+	if b.NumberingPlan, e = buf.ReadByte(); e != nil {
+		return
+	}
+	if b.AddressRange, e = readCString(buf); e != nil {
 		return
 	}
 
@@ -86,27 +74,27 @@ func acceptTransmitter(c net.Conn, txQ chan command) (e error) {
 	// interface_version
 	writeString(0x0210, []byte{0x34}, &w)
 
-	if e = writePDU(c, i, 0, n, w.Bytes()); e != nil {
+	if e = b.writePDU(i, 0, n, w.Bytes()); e != nil {
 		return
 	}
 
 	t := time.AfterFunc(KeepAlive, func() {
-		writePDU(c, 0x00000015, 0, n, nil)
+		b.writePDU(0x00000015, 0, n, nil)
 	})
-	for i, _, n, b, e = readPDU(c); e == nil; i, _, n, b, e = readPDU(c) {
+	for i, _, n, v, e = b.readPDU(); e == nil; i, _, n, v, e = b.readPDU() {
 		t.Reset(KeepAlive)
 		switch i {
 		case 0x00000015: // enquire_link
-			e = writePDU(c, 0x80000015, 0, n, nil)
+			e = b.writePDU(0x80000015, 0, n, nil)
 		case 0x80000015: // enquire_link_resp
 		case 0x00000006: // unbind
-			e = writePDU(c, 0x80000006, 0, n, nil)
+			e = b.writePDU(0x80000006, 0, n, nil)
 			e = errors.New("closed")
 		case 0x80000006: // unbind_resp
 		case 0x00000004, 0x00000103: // submit_sm, data_sm
 			rxQ <- command{info: info, id: i, seq: n, body: b, w: c}
 		default: // generic_nack
-			e = writePDU(c, 0x80000000, 0x00000003, n, nil)
+			e = b.writePDU(0x80000000, 0x00000003, n, nil)
 		}
 	}
 	return

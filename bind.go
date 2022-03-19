@@ -60,6 +60,7 @@ const (
 )
 
 type BindInfo struct {
+	BindType      bindtype
 	SystemID      string
 	Password      string
 	SystemType    string
