@@ -2,11 +2,12 @@ package smpp
 
 import (
 	"bytes"
-	"encoding/binary"
-	"errors"
-	"net"
 	"time"
 )
+
+var DeliverHandler = func(info BindInfo, body []byte) (uint32, []byte) {
+	return 0, []byte{}
+}
 
 var SubmitHandler = func(info BindInfo, body []byte) (uint32, []byte) {
 	w := new(bytes.Buffer)
@@ -15,111 +16,21 @@ var SubmitHandler = func(info BindInfo, body []byte) (uint32, []byte) {
 	return 0, w.Bytes()
 }
 
-var DataHandler = func(info BindInfo, body []byte) (uint32, []byte) {
-	w := new(bytes.Buffer)
-	w.WriteString(time.Now().String())
-	w.WriteByte(0)
-	return 0, w.Bytes()
-}
-
-func Accept(l net.Listener) (b Bind, e error) {
-	if b.con, e = l.Accept(); e != nil {
-		return
-	}
-
-	i, _, n, v, e := b.readPDU()
-	if e != nil {
-		return
-	}
-	if i != 0x00000002 {
-		b.writePDU(0x80000000, 0x00000003, n, nil)
-		e = errors.New("invalid request")
-		return
-	}
-	i |= 0x80000000
-
-	// verify request
-	buf := bytes.NewBuffer(v)
-	if b.SystemID, e = readCString(buf); e != nil {
-		return
-	}
-	if b.Password, e = readCString(buf); e != nil {
-		return
-	}
-	if b.SystemType, e = readCString(buf); e != nil {
-		return
-	}
-	tmp, e := buf.ReadByte()
-	if e != nil {
-		return
-	} else if tmp != 0x34 {
-		b.writePDU(0x80000000, 0x00000003, n, nil)
-		e = errors.New("invalid version")
-		return
-	}
-	if b.TypeOfNumber, e = buf.ReadByte(); e != nil {
-		return
-	}
-	if b.NumberingPlan, e = buf.ReadByte(); e != nil {
-		return
-	}
-	if b.AddressRange, e = readCString(buf); e != nil {
-		return
-	}
-
-	// make response
-	w := bytes.Buffer{}
-	// system_id
-	writeCString(0, []byte(ID), &w)
-	// interface_version
-	writeString(0x0210, []byte{0x34}, &w)
-
-	if e = b.writePDU(i, 0, n, w.Bytes()); e != nil {
-		return
-	}
-
-	t := time.AfterFunc(KeepAlive, func() {
-		b.writePDU(0x00000015, 0, n, nil)
-	})
-	for i, _, n, v, e = b.readPDU(); e == nil; i, _, n, v, e = b.readPDU() {
-		t.Reset(KeepAlive)
-		switch i {
-		case 0x00000015: // enquire_link
-			e = b.writePDU(0x80000015, 0, n, nil)
-		case 0x80000015: // enquire_link_resp
-		case 0x00000006: // unbind
-			e = b.writePDU(0x80000006, 0, n, nil)
-			e = errors.New("closed")
-		case 0x80000006: // unbind_resp
-		case 0x00000004, 0x00000103: // submit_sm, data_sm
-			rxQ <- command{info: info, id: i, seq: n, body: b, w: c}
-		default: // generic_nack
-			e = b.writePDU(0x80000000, 0x00000003, n, nil)
+var RequestHandler = func(info BindInfo, pdu PDU) (uint32, PDU) {
+	switch pdu.(type) {
+	case *DataSM:
+		return 0, &DataSM_resp{
+			MessageID: "random id",
+		}
+	case *DeliverSM:
+		return 0, &DeliverSM_resp{
+			MessageID: "random id",
 		}
 	}
-	return
+	return 0x00000003, nil
 }
 
-func readCString(buf *bytes.Buffer) (string, error) {
-	b, e := buf.ReadBytes(0x00)
-	return string(b), e
-}
-
-func writeCString(id int, value []byte, buf *bytes.Buffer) {
-	if id != 0 {
-		binary.Write(buf, binary.BigEndian, uint16(id))
-		binary.Write(buf, binary.BigEndian, uint16(len(value)+1))
-	}
-	buf.Write(value)
-	buf.WriteByte(0x00)
-}
-
-func writeString(id int, value []byte, buf *bytes.Buffer) {
-	if id != 0 {
-		binary.Write(buf, binary.BigEndian, uint16(id))
-		binary.Write(buf, binary.BigEndian, uint16(len(value)))
-	}
-	buf.Write(value)
+var DataRespHandler = func(info BindInfo, stat uint32, body []byte) {
 }
 
 /*
