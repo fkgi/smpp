@@ -1,25 +1,121 @@
 package smpp
 
-import (
-	"bytes"
-	"time"
-)
+import "time"
 
-var DeliverHandler = func(info BindInfo, body []byte) (uint32, []byte) {
-	return 0, []byte{}
+type message struct {
+	id   uint32
+	stat uint32
+	seq  uint32
+	body []byte
+
+	notify chan message
 }
 
-var SubmitHandler = func(info BindInfo, body []byte) (uint32, []byte) {
-	w := new(bytes.Buffer)
-	w.WriteString(time.Now().String())
-	w.WriteByte(0)
-	return 0, w.Bytes()
+func (b *Bind) serve() {
+	// worker for Rx data from socket
+	go func() {
+		for msg, e := b.readPDU(); e == nil; msg, e = b.readPDU() {
+			b.eventQ <- msg
+		}
+	}()
+
+	// worker for Rx request handling
+	go func() {
+		for msg, ok := <-b.msgQ; ok; msg, ok = <-b.msgQ {
+			var d Request
+			switch msg.id {
+			case 0x00000004: // submit_sm
+				d = &SubmitSM{}
+			case 0x00000005: // deliver_sm
+				d = &DeliverSM{}
+			case 0x00000103: // data_sm
+				d = &DataSM{}
+			}
+			d.Unmarshal(msg.body)
+
+			msg := message{
+				// seq: ,
+				notify: make(chan message),
+			}
+			var res Response
+			msg.stat, res = RequestHandler(b.BindInfo, d)
+			if res != nil {
+				msg.id = res.CommandID()
+				msg.body = res.Marshal()
+			} else {
+				msg.body = nil
+			}
+			b.eventQ <- msg
+		}
+	}()
+
+	enquireT := time.AfterFunc(KeepAlive, func() {
+		msg := message{
+			id:     0x00000015,
+			seq:    nextSequence(),
+			notify: make(chan message)}
+		b.eventQ <- msg
+		wt := time.AfterFunc(Expire, func() {
+			b.eventQ <- message{
+				id:   0x80000000,
+				stat: 0xFFFFFFFF,
+				seq:  msg.seq}
+		})
+		msg = <-msg.notify
+		wt.Stop()
+		if msg.stat != 0x00000000 {
+			b.Close()
+		}
+	})
+
+	for m, ok := <-b.eventQ; ok; m, ok = <-b.eventQ {
+		if m.notify != nil && m.id&0x80000000 == 0x00000000 { // Tx req
+			b.reqStack[m.seq] = m.notify
+			e := b.writePDU(m.id, 0, m.seq, m.body)
+			if e != nil {
+				break
+			}
+		} else if m.notify != nil { // Tx ans
+			b.writePDU(m.id, m.stat, m.seq, m.body)
+		} else if m.id == 0x00000015 { // Rx enquire_link
+			e := b.writePDU(0x80000015, 0, m.seq, nil)
+			if e != nil {
+				break
+			}
+		} else if m.id == 0x00000006 { // Rx unbind
+			b.writePDU(0x80000006, 0, m.seq, nil)
+			break
+		} else if m.id == 0x00000004 { // Rx submit_sm
+			b.msgQ <- m
+		} else if m.id == 0x00000005 { // Rx deliver_sm
+			b.msgQ <- m
+		} else if m.id == 0x00000103 { // Rx data_sm
+			b.msgQ <- m
+		} else if m.id&0x80000000 == 0x00000000 { // Rx other req
+			e := b.writePDU(0x80000000, 0x00000003, m.seq, nil)
+			if e != nil {
+				break
+			}
+		} else { // Handle Rx ans
+			notify, ok := b.reqStack[m.seq]
+			if ok {
+				notify <- m
+			}
+		}
+		enquireT.Reset(KeepAlive)
+	}
+	enquireT.Stop()
+	b.con.Close()
 }
 
-var RequestHandler = func(info BindInfo, pdu PDU) (uint32, PDU) {
+var RequestHandler = func(info BindInfo, pdu Request) (uint32, Response) {
 	switch pdu.(type) {
 	case *DataSM:
 		return 0, &DataSM_resp{
+			MessageID: "random id",
+		}
+	case *SubmitSM:
+		return 0, &SubmitSM_resp{
 			MessageID: "random id",
 		}
 	case *DeliverSM:
@@ -29,143 +125,3 @@ var RequestHandler = func(info BindInfo, pdu PDU) (uint32, PDU) {
 	}
 	return 0x00000003, nil
 }
-
-var DataRespHandler = func(info BindInfo, stat uint32, body []byte) {
-}
-
-/*
-
-func DialTransmitter(addr string, info BindInfo) (t Transmitter, e error) {
-	if len(info.SystemID) > 15 {
-		info.SystemID = info.SystemID[:16]
-	}
-	if len(info.Password) > 8 {
-		info.Password = info.Password[:9]
-	}
-	if len(info.SystemType) > 12 {
-		info.SystemType = info.SystemType[:13]
-	}
-	t.con, e = net.Dial("tcp", addr)
-	if e != nil {
-		return
-	}
-	t.seq = newSequence()
-
-	w := new(bytes.Buffer)
-	w.WriteString(info.SystemID)
-	w.WriteByte(0)
-	w.WriteString(info.Password)
-	w.WriteByte(0)
-	w.WriteString(info.SystemType)
-	w.WriteByte(0)
-	// interface_version
-	w.WriteByte(0x34)
-	w.WriteByte(info.TypeOfNumber)
-	w.WriteByte(info.NumberingPlan)
-	w.WriteString(info.AddressRange)
-	w.WriteByte(0)
-
-	e = writePDU(t.con, 0x00000002, 0, t.seq.next(), w.Bytes())
-	if e != nil {
-		return
-	}
-
-	mid, _, num, _, e := readPDU(t.con)
-	if e != nil {
-	} else if mid != 0x80000002 {
-		e = errors.New("invalid response")
-	} else if num != 1 {
-		e = errors.New("invalid response")
-	}
-
-	return
-}
-
-func (t Transmitter) Submit() error {
-	u := utf16.Encode([]rune("てすと"))
-	ud := make([]byte, len(u)*2)
-	for i, c := range u {
-		ud[i*2] = byte((c >> 8) & 0xff)
-		ud[i*2+1] = byte(c & 0xff)
-	}
-
-	w := new(bytes.Buffer)
-	// service_type
-	w.WriteString("TEST")
-	w.WriteByte(0)
-	// source_addr_ton
-	w.WriteByte(0)
-	// source_addr_npi
-	w.WriteByte(0)
-	// source_addr
-	w.WriteByte(0)
-	// dest_addr_ton
-	w.WriteByte(0x01)
-	// dest_addr_npi
-	w.WriteByte(0x01)
-	// destination_addr
-	w.WriteString("819011112222")
-	w.WriteByte(0)
-	// esm_class
-	w.WriteByte(0x00)
-	// protocol_id
-	w.WriteByte(0x00)
-	// priority_flag
-	w.WriteByte(0x00)
-	// schedule_delivery_time
-	w.WriteByte(0x00)
-	// validity_period
-	w.WriteByte(0x00)
-	// registered_delivery
-	w.WriteByte(0x00)
-	// replace_if_present_flag
-	w.WriteByte(0x00)
-	// data_coding
-	w.WriteByte(0x08)
-	// sm_default_msg_id
-	w.WriteByte(0x00)
-	// sm_length
-	w.WriteByte(byte(len(ud)))
-	// short_message
-	w.Write(ud)
-
-	e := writePDU(t.con, 0x00000004, 0, t.seq.next(), w.Bytes())
-	if e != nil {
-		return e
-	}
-
-	mid, _, _, _, e := readPDU(t.con)
-	if e != nil {
-	} else if mid != 0x80000004 {
-		return errors.New("invalid response")
-	}
-	return nil
-}
-
-func (t Transmitter) Close() error {
-	e := writePDU(t.con, 0x00000006, 0, t.seq.next(), nil)
-	if e != nil {
-		return e
-	}
-	mid, _, _, _, e := readPDU(t.con)
-	if e != nil {
-	} else if mid != 0x80000006 {
-		return errors.New("invalid response")
-	}
-	return nil
-}
-
-func (t Transmitter) Enquire() error {
-	e := writePDU(t.con, 0x00000015, 0, t.seq.next(), nil)
-	if e != nil {
-		return e
-	}
-	mid, _, _, _, e := readPDU(t.con)
-	if e != nil {
-	} else if mid != 0x80000015 {
-		return errors.New("invalid response")
-	}
-	return nil
-}
-
-*/
