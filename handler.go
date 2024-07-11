@@ -15,7 +15,16 @@ func (b *Bind) serve() {
 	// worker for Rx data from socket
 	go func() {
 		for msg, e := b.readPDU(); e == nil; msg, e = b.readPDU() {
-			b.eventQ <- msg
+			switch msg.id {
+			case 0x00000004: // submit_sm
+				b.msgQ <- msg
+			case 0x00000005: // deliver_sm
+				b.msgQ <- msg
+			case 0x00000103: // data_sm
+				b.msgQ <- msg
+			default:
+				b.eventQ <- msg
+			}
 		}
 	}()
 
@@ -33,18 +42,16 @@ func (b *Bind) serve() {
 			}
 			d.Unmarshal(msg.body)
 
-			msg := message{
-				// seq: ,
-				notify: make(chan message),
-			}
 			var res Response
 			msg.stat, res = RequestHandler(b.BindInfo, d)
 			if res != nil {
 				msg.id = res.CommandID()
 				msg.body = res.Marshal()
 			} else {
+				msg.id = 0x80000000
 				msg.body = nil
 			}
+			msg.notify = make(chan message)
 			b.eventQ <- msg
 		}
 	}()
@@ -61,6 +68,7 @@ func (b *Bind) serve() {
 				stat: 0xFFFFFFFF,
 				seq:  msg.seq}
 		})
+
 		msg = <-msg.notify
 		wt.Stop()
 		if msg.stat != 0x00000000 {
@@ -85,13 +93,7 @@ func (b *Bind) serve() {
 		} else if m.id == 0x00000006 { // Rx unbind
 			b.writePDU(0x80000006, 0, m.seq, nil)
 			break
-		} else if m.id == 0x00000004 { // Rx submit_sm
-			b.msgQ <- m
-		} else if m.id == 0x00000005 { // Rx deliver_sm
-			b.msgQ <- m
-		} else if m.id == 0x00000103 { // Rx data_sm
-			b.msgQ <- m
-		} else if m.id&0x80000000 == 0x00000000 { // Rx other req
+		} else if m.id < 0x80000000 { // Rx other req
 			e := b.writePDU(0x80000000, 0x00000003, m.seq, nil)
 			if e != nil {
 				break
@@ -104,6 +106,7 @@ func (b *Bind) serve() {
 		}
 		enquireT.Reset(KeepAlive)
 	}
+
 	enquireT.Stop()
 	b.con.Close()
 }
