@@ -26,6 +26,8 @@ func (b *Bind) serve() {
 				b.eventQ <- msg
 			}
 		}
+		close(b.msgQ)
+		// close(b.eventQ)
 	}()
 
 	// worker for Rx request handling
@@ -76,33 +78,34 @@ func (b *Bind) serve() {
 		}
 	})
 
-	for m, ok := <-b.eventQ; ok; m, ok = <-b.eventQ {
-		if m.notify != nil && m.id&0x80000000 == 0x00000000 { // Tx req
-			b.reqStack[m.seq] = m.notify
-			e := b.writePDU(m.id, 0, m.seq, m.body)
-			if e != nil {
-				break
-			}
-		} else if m.notify != nil { // Tx ans
-			b.writePDU(m.id, m.stat, m.seq, m.body)
-		} else if m.id == 0x00000015 { // Rx enquire_link
-			e := b.writePDU(0x80000015, 0, m.seq, nil)
-			if e != nil {
-				break
-			}
-		} else if m.id == 0x00000006 { // Rx unbind
-			b.writePDU(0x80000006, 0, m.seq, nil)
+	for {
+		msg := <-b.eventQ
+		var e error
+
+		if msg.notify != nil && msg.id < 0x80000000 {
+			// Tx req
+			b.reqStack[msg.seq] = msg.notify
+			e = b.writePDU(msg.id, 0, msg.seq, msg.body)
+		} else if msg.notify != nil {
+			// Tx ans
+			e = b.writePDU(msg.id, msg.stat, msg.seq, msg.body)
+		} else if msg.id == 0x00000015 {
+			// Rx enquire_link
+			e = b.writePDU(0x80000015, 0, msg.seq, nil)
+		} else if msg.id == 0x00000006 {
+			// Rx unbind
+			b.writePDU(0x80000006, 0, msg.seq, nil)
 			break
-		} else if m.id < 0x80000000 { // Rx other req
-			e := b.writePDU(0x80000000, 0x00000003, m.seq, nil)
-			if e != nil {
-				break
-			}
-		} else { // Handle Rx ans
-			notify, ok := b.reqStack[m.seq]
-			if ok {
-				notify <- m
-			}
+		} else if msg.id < 0x80000000 {
+			// Rx other req
+			e = b.writePDU(0x80000000, 0x00000003, msg.seq, nil)
+		} else if notify, ok := b.reqStack[msg.seq]; ok {
+			// Handle Rx ans
+			notify <- msg
+		}
+
+		if e != nil {
+			break
 		}
 		enquireT.Reset(KeepAlive)
 	}
