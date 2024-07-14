@@ -9,7 +9,7 @@ import (
 )
 
 type PDU interface {
-	CommandID() uint32
+	CommandID() CommandID
 	Marshal() []byte
 	Unmarshal([]byte) error
 }
@@ -45,10 +45,14 @@ func (b *Bind) readPDU() (msg message, e error) {
 			}
 		}
 	}
+
+	if RxMessageNotify != nil {
+		RxMessageNotify(msg.id, msg.stat, msg.seq, msg.body)
+	}
 	return
 }
 
-func (b *Bind) writePDU(id, stat, seq uint32, body []byte) (e error) {
+func (b *Bind) writePDU(id CommandID, stat, seq uint32, body []byte) (e error) {
 	if body == nil {
 		body = []byte{}
 	}
@@ -64,7 +68,12 @@ func (b *Bind) writePDU(id, stat, seq uint32, body []byte) (e error) {
 	binary.Write(buf, binary.BigEndian, seq)
 
 	buf.Write(body)
-	return buf.Flush()
+	e = buf.Flush()
+
+	if e == nil && TxMessageNotify != nil {
+		TxMessageNotify(id, stat, seq, body)
+	}
+	return
 }
 
 func readCString(buf *bytes.Buffer) (string, error) {
@@ -126,7 +135,7 @@ type DataSM struct {
 	Param              map[uint16][]byte `json:"options"`
 }
 
-func (*DataSM) CommandID() uint32 {
+func (*DataSM) CommandID() CommandID {
 	return 0x00000103
 }
 
@@ -181,12 +190,12 @@ func (d *DataSM) Unmarshal(data []byte) (e error) {
 }
 
 type DataSM_resp struct {
-	Status    uint32
-	MessageID string
-	Param     map[uint16][]byte
+	Status    uint32            `json:"status"`
+	MessageID string            `json:"id"`
+	Param     map[uint16][]byte `json:"options"`
 }
 
-func (*DataSM_resp) CommandID() uint32 {
+func (*DataSM_resp) CommandID() CommandID {
 	return 0x80000103
 }
 
@@ -250,7 +259,7 @@ type SubmitSM struct {
 	Param map[uint16][]byte
 }
 
-func (*SubmitSM) CommandID() uint32 {
+func (*SubmitSM) CommandID() CommandID {
 	return 0x00000005
 }
 
@@ -325,11 +334,11 @@ func (d *SubmitSM) Unmarshal(data []byte) (e error) {
 }
 
 type SubmitSM_resp struct {
-	Status    uint32
-	MessageID string
+	Status    uint32 `json:"status"`
+	MessageID string `json:"id"`
 }
 
-func (*SubmitSM_resp) CommandID() uint32 {
+func (*SubmitSM_resp) CommandID() CommandID {
 	return 0x80000005
 }
 
@@ -373,7 +382,7 @@ type DeliverSM struct {
 	Param map[uint16][]byte `json:"options"`
 }
 
-func (*DeliverSM) CommandID() uint32 {
+func (*DeliverSM) CommandID() CommandID {
 	return 0x00000005
 }
 
@@ -448,11 +457,11 @@ func (d *DeliverSM) Unmarshal(data []byte) (e error) {
 }
 
 type DeliverSM_resp struct {
-	Status    uint32
-	MessageID string
+	Status    uint32 `json:"status"`
+	MessageID string `json:"id"`
 }
 
-func (*DeliverSM_resp) CommandID() uint32 {
+func (*DeliverSM_resp) CommandID() CommandID {
 	return 0x80000005
 }
 

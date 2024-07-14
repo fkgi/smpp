@@ -11,7 +11,7 @@ import (
 type bindtype int
 
 const (
-	ClosedBind bindtype = iota
+	NilBind bindtype = iota
 	TxBind
 	RxBind
 	TRxBind
@@ -32,32 +32,30 @@ type Bind struct {
 	BindInfo
 	con      net.Conn
 	eventQ   chan message
-	msgQ     chan message
+	requestQ chan message
 	reqStack map[uint32]chan message
 }
 
-func Accept(l net.Listener) (b Bind, e error) {
-	if b.con, e = l.Accept(); e != nil {
-		return
-	}
+func Accept(c net.Conn) (b Bind, e error) {
+	b.con = c
 
 	msg, e := b.readPDU()
 	if e != nil {
 		return
 	}
 	switch msg.id {
-	case 0x00000001: // bind_receiver
+	case BindReceiver:
 		b.BindType = TxBind
-	case 0x00000002: // bind_transmitter
+	case BindTransmitter:
 		b.BindType = RxBind
-	case 0x00000009: // bind_transceiver
+	case BindTransceiver:
 		b.BindType = TRxBind
 	default:
-		b.writePDU(0x80000000, 0x00000003, msg.seq, nil)
+		b.writePDU(GenericNack, 0x00000003, msg.seq, nil)
 		e = errors.New("invalid request")
 		return
 	}
-	id := msg.id | 0x80000000
+	id := msg.id | GenericNack
 
 	// verify request
 	buf := bytes.NewBuffer(msg.body)
@@ -75,7 +73,7 @@ func Accept(l net.Listener) (b Bind, e error) {
 	}
 
 	if e != nil {
-		b.writePDU(0x80000000, 0x0000000d, msg.seq, nil)
+		b.writePDU(GenericNack, 0x0000000d, msg.seq, nil)
 		return
 	}
 
@@ -91,7 +89,7 @@ func Accept(l net.Listener) (b Bind, e error) {
 	}
 
 	b.eventQ = make(chan message, 1024)
-	b.msgQ = make(chan message, 1024)
+	b.requestQ = make(chan message, 1024)
 	b.reqStack = make(map[uint32]chan message)
 
 	go b.serve()
@@ -102,14 +100,14 @@ func Connect(c net.Conn, info BindInfo) (b Bind, e error) {
 	b.BindInfo = info
 	b.con = c
 
-	var id uint32
+	var id CommandID
 	switch b.BindType {
 	case RxBind:
-		id = 0x00000001
+		id = BindReceiver
 	case TxBind:
-		id = 0x00000002
+		id = BindTransmitter
 	case TRxBind:
-		id = 0x00000009
+		id = BindTransceiver
 	default:
 		e = errors.New("invalid bind type")
 		return
@@ -143,15 +141,15 @@ func Connect(c net.Conn, info BindInfo) (b Bind, e error) {
 	}
 
 	switch msg.id {
-	case 0x80000001: // bind_receiver_resp
+	case BindReceiverResp:
 		if info.BindType != RxBind {
 			e = errors.New("invalid response")
 		}
-	case 0x80000002: // bind_transmitter_resp
+	case BindTransmitterResp:
 		if info.BindType != TxBind {
 			e = errors.New("invalid response")
 		}
-	case 0x80000009: // bind_transceiver_resp
+	case BindTransceiverResp:
 		if info.BindType != TRxBind {
 			e = errors.New("invalid response")
 		}
@@ -201,7 +199,7 @@ func Connect(c net.Conn, info BindInfo) (b Bind, e error) {
 	}
 
 	b.eventQ = make(chan message, 1024)
-	b.msgQ = make(chan message, 1024)
+	b.requestQ = make(chan message, 1024)
 	b.reqStack = make(map[uint32]chan message)
 
 	go b.serve()
@@ -209,43 +207,66 @@ func Connect(c net.Conn, info BindInfo) (b Bind, e error) {
 }
 
 func (b *Bind) Close() {
+	if b.BindType == NilBind {
+		return
+	}
+
 	msg := message{
-		id:     0x00000006,
-		seq:    nextSequence(),
-		notify: make(chan message)}
+		id:       Unbind,
+		seq:      nextSequence(),
+		callback: make(chan message)}
 	b.eventQ <- msg
 
 	wt := time.AfterFunc(Expire, func() {
 		b.eventQ <- message{
-			id:   0x80000000,
+			id:   InternalFailure,
 			stat: 0xFFFFFFFF,
 			seq:  msg.seq}
 	})
-	msg = <-msg.notify
+	msg = <-msg.callback
 	wt.Stop()
 
 	b.con.Close()
 }
 
-func (b *Bind) Send(p Request) (e error) {
+func (b *Bind) Send(p Request) (a Response, e error) {
+	if b.BindType == NilBind {
+		e = errors.New("closed bind")
+		return
+	}
+
 	msg := message{
-		id:     p.CommandID(),
-		seq:    nextSequence(),
-		body:   p.Marshal(),
-		notify: make(chan message)}
+		id:       p.CommandID(),
+		seq:      nextSequence(),
+		body:     p.Marshal(),
+		callback: make(chan message)}
 	b.eventQ <- msg
 
 	wt := time.AfterFunc(Expire, func() {
 		b.eventQ <- message{
-			id:   0x80000000,
+			id:   InternalFailure,
 			stat: 0xFFFFFFFF,
 			seq:  msg.seq}
 	})
-	msg = <-msg.notify
+	msg = <-msg.callback
 	wt.Stop()
 
-	if msg.stat != 0x00000000 {
+	switch msg.id {
+	case SubmitSmResp:
+		a = &SubmitSM_resp{}
+	case DeliverSmResp:
+		a = &DeliverSM_resp{}
+	case DataSmResp:
+		a = &DataSM_resp{}
+	case GenericNack:
 		e = errors.New("send failed")
+	default:
+		e = errors.New("unexpected response")
 	}
+	if e != nil {
+		return
+	}
+
+	e = a.Unmarshal(msg.body)
 	return
 }
