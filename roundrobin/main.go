@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -124,12 +125,16 @@ func main() {
 		fmt.Fprintln(buf, "| sequence_number:", seq)
 		log.Print(buf)
 	}
+	smpp.RequestHandler = handleSMPP
 
 	http.HandleFunc("/data", func(w http.ResponseWriter, r *http.Request) {
 		handleHTTP(w, r, &smpp.DataSM{}, b)
 	})
 	http.HandleFunc("/deliver", func(w http.ResponseWriter, r *http.Request) {
 		handleHTTP(w, r, &smpp.DeliverSM{}, b)
+	})
+	http.HandleFunc("/submit", func(w http.ResponseWriter, r *http.Request) {
+		handleHTTP(w, r, &smpp.SubmitSM{}, b)
 	})
 
 	backend = "http://" + *ph
@@ -221,4 +226,50 @@ func handleHTTP(w http.ResponseWriter, r *http.Request, d smpp.Request, b smpp.B
 	w.WriteHeader(http.StatusOK)
 	w.Write(jsondata)
 
+}
+
+func handleSMPP(info smpp.BindInfo, req smpp.Request) (stat uint32, res smpp.Response) {
+	jsondata, e := json.Marshal(req)
+	if e != nil {
+		stat = 0x00000008
+		return
+	}
+	var path string
+	switch req.(type) {
+	case *smpp.DataSM:
+		path = "/data"
+		res = &smpp.DataSM_resp{}
+	case *smpp.DeliverSM:
+		path = "/deliver"
+		res = &smpp.DeliverSM_resp{}
+	case *smpp.SubmitSM:
+		path = "/submit"
+		res = &smpp.SubmitSM_resp{}
+	default:
+		stat = 0x00000008
+		return
+	}
+
+	r, e := http.Post(backend+path, "application/json", bytes.NewBuffer(jsondata))
+	if e != nil {
+		res = nil
+		stat = 0x00000008
+		return
+	}
+
+	jsondata, e = io.ReadAll(r.Body)
+	defer r.Body.Close()
+	if e != nil {
+		res = nil
+		stat = 0x00000008
+		return
+	}
+	if e = json.Unmarshal(jsondata, res); e != nil {
+		res = nil
+		stat = 0x00000008
+		return
+	}
+
+	stat = 0
+	return
 }

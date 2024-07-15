@@ -156,9 +156,7 @@ var RequestHandler = func(info BindInfo, pdu Request) (uint32, Response) {
 			MessageID: "random id",
 		}
 	case *DeliverSM:
-		return 0, &DeliverSM_resp{
-			MessageID: "random id",
-		}
+		return 0, &DeliverSM_resp{}
 	}
 	return 0, nil
 }

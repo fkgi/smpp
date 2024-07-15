@@ -78,7 +78,7 @@ func (b *Bind) writePDU(id CommandID, stat, seq uint32, body []byte) (e error) {
 
 func readCString(buf *bytes.Buffer) (string, error) {
 	b, e := buf.ReadBytes(0x00)
-	return string(b), e
+	return string(b[:len(b)-1]), e
 }
 
 func writeCString(value []byte, buf *bytes.Buffer) {
@@ -122,9 +122,9 @@ type Response interface {
 
 type DataSM struct {
 	SvcType  string `json:"svc_type"`
-	SrcTON   byte   `json:"src_ton"`
-	SrcNPI   byte   `json:"src_npi"`
-	SrcAddr  string `json:"src_addr"`
+	SrcTON   byte   `json:"src_ton,omitempty"`
+	SrcNPI   byte   `json:"src_npi,omitempty"`
+	SrcAddr  string `json:"src_addr,omitempty"`
 	DstTON   byte   `json:"dst_ton"`
 	DstNPI   byte   `json:"dst_npi"`
 	DstAddr  string `json:"dst_addr"`
@@ -132,7 +132,7 @@ type DataSM struct {
 
 	RegisteredDelivery byte              `json:"registered_delivery"`
 	DataCoding         byte              `json:"data_coding"`
-	Param              map[uint16][]byte `json:"options"`
+	Param              map[uint16][]byte `json:"options,omitempty"`
 }
 
 func (*DataSM) CommandID() CommandID {
@@ -192,7 +192,7 @@ func (d *DataSM) Unmarshal(data []byte) (e error) {
 type DataSM_resp struct {
 	Status    uint32            `json:"status"`
 	MessageID string            `json:"id"`
-	Param     map[uint16][]byte `json:"options"`
+	Param     map[uint16][]byte `json:"options,omitempty"`
 }
 
 func (*DataSM_resp) CommandID() CommandID {
@@ -309,6 +309,7 @@ func (d *SubmitSM) Unmarshal(data []byte) (e error) {
 	} else if d.ScheduleDeliveryTime, e = readCString(buf); e != nil {
 	} else if d.ValidityPeriod, e = readCString(buf); e != nil {
 	} else if d.RegisteredDelivery, e = buf.ReadByte(); e != nil {
+	} else if d.ReplaceIfPresentFlag, e = buf.ReadByte(); e != nil {
 	} else if d.DataCoding, e = buf.ReadByte(); e != nil {
 	} else if d.SmDefaultMsgId, e = buf.ReadByte(); e != nil {
 	} else if l, e = buf.ReadByte(); e != nil {
@@ -360,9 +361,9 @@ func (d *SubmitSM_resp) CommandStatus() uint32 {
 
 type DeliverSM struct {
 	SvcType  string `json:"svc_type"`
-	SrcTON   byte   `json:"src_ton"`
-	SrcNPI   byte   `json:"src_npi"`
-	SrcAddr  string `json:"src_addr"`
+	SrcTON   byte   `json:"src_ton,omitempty"`
+	SrcNPI   byte   `json:"src_npi,omitempty"`
+	SrcAddr  string `json:"src_addr,omitempty"`
 	DstTON   byte   `json:"dst_ton"`
 	DstNPI   byte   `json:"dst_npi"`
 	DstAddr  string `json:"dst_addr"`
@@ -370,16 +371,16 @@ type DeliverSM struct {
 
 	ProtocolId           byte   `json:"protocol_id"`
 	PriorityFlag         byte   `json:"priority_flag"`
-	ScheduleDeliveryTime string `json:"schedule_delivery_time"`
-	ValidityPeriod       string `json:"validity_period"`
+	ScheduleDeliveryTime string `json:"schedule_delivery_time,omitempty"`
+	ValidityPeriod       string `json:"validity_period,omitempty"`
 	RegisteredDelivery   byte   `json:"registered_delivery"`
-	ReplaceIfPresentFlag byte   `json:"replace_if_present_flag"`
+	ReplaceIfPresentFlag byte   `json:"replace_if_present_flag,omitempty"`
 	DataCoding           byte   `json:"data_coding"`
-	SmDefaultMsgId       byte   `json:"sm_default_sm_id"`
+	SmDefaultMsgId       byte   `json:"sm_default_sm_id,omitempty"`
 	// SmLength            byte
 	ShortMessage []byte `json:"short_message"`
 
-	Param map[uint16][]byte `json:"options"`
+	Param map[uint16][]byte `json:"options,omitempty"`
 }
 
 func (*DeliverSM) CommandID() CommandID {
@@ -432,6 +433,7 @@ func (d *DeliverSM) Unmarshal(data []byte) (e error) {
 	} else if d.ScheduleDeliveryTime, e = readCString(buf); e != nil {
 	} else if d.ValidityPeriod, e = readCString(buf); e != nil {
 	} else if d.RegisteredDelivery, e = buf.ReadByte(); e != nil {
+	} else if d.ReplaceIfPresentFlag, e = buf.ReadByte(); e != nil {
 	} else if d.DataCoding, e = buf.ReadByte(); e != nil {
 	} else if d.SmDefaultMsgId, e = buf.ReadByte(); e != nil {
 	} else if l, e = buf.ReadByte(); e != nil {
@@ -458,7 +460,7 @@ func (d *DeliverSM) Unmarshal(data []byte) (e error) {
 
 type DeliverSM_resp struct {
 	Status    uint32 `json:"status"`
-	MessageID string `json:"id"`
+	MessageID string `json:"id,omitempty"`
 }
 
 func (*DeliverSM_resp) CommandID() CommandID {
