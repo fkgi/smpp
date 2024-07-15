@@ -94,14 +94,18 @@ func main() {
 
 	log.Println("booting Round-Robin debugger for SMPP...")
 	if info.BindType == smpp.NilBind {
-		log.Println("running as SMSC")
-		log.Println("system ID:", *id)
+		buf := new(strings.Builder)
+		fmt.Fprintln(buf, "running as SMSC")
+		fmt.Fprintln(buf, "| system ID:", *id)
+		log.Print(buf)
 	} else {
-		log.Println("running as ESME")
-		log.Println("system ID  :", *id)
-		log.Println("password   :", *pw)
-		log.Println("system type:", *st)
-		log.Printf("address    : %s(ton=%d, npi=%d)", *ar, *tn, *np)
+		buf := new(strings.Builder)
+		fmt.Fprintln(buf, "running as ESME")
+		fmt.Fprintln(buf, "| system ID  :", *id)
+		fmt.Fprintln(buf, "| password   :", *pw)
+		fmt.Fprintln(buf, "| system type:", *st)
+		fmt.Fprintf(buf, "| address    : %s(ton=%d, npi=%d)", *ar, *tn, *np)
+		log.Print(buf)
 	}
 
 	var b smpp.Bind
@@ -110,20 +114,10 @@ func main() {
 		sigc <- nil
 	}
 	smpp.RxMessageNotify = func(id smpp.CommandID, stat, seq uint32, body []byte) {
-		buf := new(strings.Builder)
-		fmt.Fprintln(buf, "Rx message")
-		fmt.Fprintln(buf, "| command_id     :", id)
-		fmt.Fprintln(buf, "| command_status :", stat)
-		fmt.Fprintln(buf, "| sequence_number:", seq)
-		log.Print(buf)
+		log.Printf("Rx SMPP message: %s(status=%d, sequence=%d)", id, stat, seq)
 	}
 	smpp.TxMessageNotify = func(id smpp.CommandID, stat, seq uint32, body []byte) {
-		buf := new(strings.Builder)
-		fmt.Fprintln(buf, "Tx message")
-		fmt.Fprintln(buf, "| command_id     :", id)
-		fmt.Fprintln(buf, "| command_status :", stat)
-		fmt.Fprintln(buf, "| sequence_number:", seq)
-		log.Print(buf)
+		log.Printf("Tx SMPP message: %s(status=%d, sequence=%d)", id, stat, seq)
 	}
 	smpp.RequestHandler = handleSMPP
 
@@ -250,6 +244,7 @@ func handleSMPP(info smpp.BindInfo, req smpp.Request) (stat uint32, res smpp.Res
 		return
 	}
 
+	//log.Println("send HTTP", string(jsondata))
 	r, e := http.Post(backend+path, "application/json", bytes.NewBuffer(jsondata))
 	if e != nil {
 		res = nil
@@ -264,6 +259,7 @@ func handleSMPP(info smpp.BindInfo, req smpp.Request) (stat uint32, res smpp.Res
 		stat = 0x00000008
 		return
 	}
+	//log.Println("receive HTTP", string(jsondata))
 	if e = json.Unmarshal(jsondata, res); e != nil {
 		res = nil
 		stat = 0x00000008
