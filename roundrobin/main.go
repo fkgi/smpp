@@ -33,26 +33,15 @@ func main() {
 	if smpp.ID, e = os.Hostname(); e != nil {
 		smpp.ID = "roundrobin"
 	}
-	id := flag.String("id", smpp.ID,
-		"System ID")
-	//ls := flag.String("smpp", "localhost:2775",
-	//	"SMPP peer/local address")
-	lh := flag.String("http", ":8080",
-		"HTTP local address")
-	ph := flag.String("backend", "",
-		"HTTP backend address")
-	bt := flag.String("bind", "svr",
-		"Bind type of client [tx/rx/trx] or server [svr]")
-	pw := flag.String("pwd", "",
-		"Password for ESME authentication")
-	st := flag.String("type", "",
-		"Type of ESME system")
-	tn := flag.Int("ton", 0,
-		"Type of Number for ESME address")
-	np := flag.Int("npi", 0,
-		"Numbering Plan Indicator for ESME address")
-	ar := flag.String("addr", "",
-		"UNIX Regular Expression notation of ESME address")
+	id := flag.String("id", smpp.ID, "System ID")
+	lh := flag.String("http", ":8080", "HTTP local address")
+	ph := flag.String("backend", "", "HTTP backend address")
+	bt := flag.String("bind", "svr", "Bind type of client [tx/rx/trx] or server [svr]")
+	pw := flag.String("pwd", "", "Password for ESME authentication")
+	st := flag.String("type", "DEBUGGER", "Type of ESME system")
+	tn := flag.Int("ton", 0, "Type of Number for ESME address")
+	np := flag.Int("npi", 0, "Numbering Plan Indicator for ESME address")
+	ar := flag.String("addr", "", "UNIX Regular Expression notation of ESME address")
 	help := flag.Bool("h", false, "Print usage")
 	flag.Parse()
 
@@ -92,7 +81,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	log.Println("booting Round-Robin debugger for SMPP...")
+	log.Println("booting Round-Robin diagnostic/debug subsystem for SMPP...")
 	if info.BindType == smpp.NilBind {
 		buf := new(strings.Builder)
 		fmt.Fprintln(buf, "running as SMSC")
@@ -140,7 +129,7 @@ func main() {
 		smpp.RequestHandler = handleSMPP
 	}
 
-	log.Println("local HTTP API port is", *lh)
+	log.Println("local HTTP API address is", *lh)
 	go func() {
 		e := http.ListenAndServe(*lh, nil)
 		if e != nil {
@@ -162,12 +151,16 @@ func main() {
 				log.Fatalln(e)
 			}
 		}
-		log.Println("bind is up")
-		log.Println("ESME system ID  :", b.PeerID)
-		log.Println("ESME password   :", b.Password)
-		log.Println("ESME system type:", b.SystemType)
-		log.Printf("ESME address    : %s(ton=%d, npi=%d)",
+		buf := new(strings.Builder)
+		fmt.Fprintln(buf, "bind is up")
+		fmt.Fprintln(buf, "ESME system ID  :", b.PeerID)
+		fmt.Fprintln(buf, "ESME password   :", b.Password)
+		fmt.Fprintln(buf, "ESME system type:", b.SystemType)
+		fmt.Fprintf(buf, "ESME address    : %s(ton=%d, npi=%d)",
 			b.AddressRange, b.TypeOfNumber, b.NumberingPlan)
+		log.Print(buf)
+
+		log.Println("bind is up")
 	} else {
 		// run as ESME
 		log.Println("connecting SMPP to", addr)
@@ -176,8 +169,10 @@ func main() {
 		} else if b, e = smpp.Connect(c, info); e != nil {
 			log.Fatalln(e)
 		}
-		log.Println("bind is up")
-		log.Println("SMSC system ID:", b.PeerID)
+		buf := new(strings.Builder)
+		fmt.Fprintln(buf, "bind is up")
+		fmt.Fprintln(buf, "SMSC system ID:", b.PeerID)
+		log.Print(buf)
 	}
 
 	signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
@@ -192,6 +187,7 @@ func main() {
 
 func handleHTTP(w http.ResponseWriter, r *http.Request, d smpp.Request, b smpp.Bind) {
 	if r.Method != http.MethodPost {
+		log.Println("invalid HTTP request method", r.Method)
 		w.Header().Add("Allow", "POST")
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -199,20 +195,24 @@ func handleHTTP(w http.ResponseWriter, r *http.Request, d smpp.Request, b smpp.B
 	jsondata, e := io.ReadAll(r.Body)
 	defer r.Body.Close()
 	if e != nil {
+		log.Println("failed to read HTTP request", e)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 	if e = json.Unmarshal(jsondata, &d); e != nil {
+		log.Println("failed to unmarshal JSON HTTP request", e)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 	res, e := b.Send(d)
 	if e != nil {
+		log.Println("failed to send SMPP request", e)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	jsondata, e = json.Marshal(res)
 	if e != nil {
+		log.Println("failed to marshal JSON SMPP response", e)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -225,6 +225,7 @@ func handleHTTP(w http.ResponseWriter, r *http.Request, d smpp.Request, b smpp.B
 func handleSMPP(info smpp.BindInfo, req smpp.Request) (stat uint32, res smpp.Response) {
 	jsondata, e := json.Marshal(req)
 	if e != nil {
+		log.Println("failed to marshal JSON SMPP request", e)
 		stat = 0x00000008
 		return
 	}
@@ -240,13 +241,14 @@ func handleSMPP(info smpp.BindInfo, req smpp.Request) (stat uint32, res smpp.Res
 		path = "/submit"
 		res = &smpp.SubmitSM_resp{}
 	default:
+		log.Println("unknown SMPP request")
 		stat = 0x00000008
 		return
 	}
 
-	//log.Println("send HTTP", string(jsondata))
 	r, e := http.Post(backend+path, "application/json", bytes.NewBuffer(jsondata))
 	if e != nil {
+		log.Println("failed to send HTTP request", e)
 		res = nil
 		stat = 0x00000008
 		return
@@ -255,12 +257,14 @@ func handleSMPP(info smpp.BindInfo, req smpp.Request) (stat uint32, res smpp.Res
 	jsondata, e = io.ReadAll(r.Body)
 	defer r.Body.Close()
 	if e != nil {
+		log.Println("failed to read HTTP response", e)
 		res = nil
 		stat = 0x00000008
 		return
 	}
-	//log.Println("receive HTTP", string(jsondata))
+
 	if e = json.Unmarshal(jsondata, res); e != nil {
+		log.Println("failed to unmarshal JSON HTTP response", e)
 		res = nil
 		stat = 0x00000008
 		return

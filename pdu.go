@@ -82,12 +82,6 @@ func readCString(buf *bytes.Buffer) (string, error) {
 }
 
 func writeCString(value []byte, buf *bytes.Buffer) {
-	/*
-		if id != 0 {
-			binary.Write(buf, binary.BigEndian, id)
-			binary.Write(buf, binary.BigEndian, uint16(len(value)+1))
-		}
-	*/
 	buf.Write(value)
 	buf.WriteByte(0x00)
 }
