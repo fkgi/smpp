@@ -260,7 +260,7 @@ type SubmitSM struct {
 }
 
 func (*SubmitSM) CommandID() CommandID {
-	return 0x00000005
+	return 0x00000006
 }
 
 func (d *SubmitSM) Marshal() []byte {
@@ -340,7 +340,7 @@ type SubmitSM_resp struct {
 }
 
 func (*SubmitSM_resp) CommandID() CommandID {
-	return 0x80000005
+	return 0x80000006
 }
 
 func (d *SubmitSM_resp) Marshal() []byte {

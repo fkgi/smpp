@@ -39,7 +39,7 @@ func main() {
 	//	"SMPP peer/local address")
 	lh := flag.String("http", ":8080",
 		"HTTP local address")
-	ph := flag.String("backend", "backend:8080",
+	ph := flag.String("backend", "",
 		"HTTP backend address")
 	bt := flag.String("bind", "svr",
 		"Bind type of client [tx/rx/trx] or server [svr]")
@@ -119,7 +119,6 @@ func main() {
 	smpp.TxMessageNotify = func(id smpp.CommandID, stat, seq uint32, body []byte) {
 		log.Printf("Tx SMPP message: %s(status=%d, sequence=%d)", id, stat, seq)
 	}
-	smpp.RequestHandler = handleSMPP
 
 	http.HandleFunc("/data", func(w http.ResponseWriter, r *http.Request) {
 		handleHTTP(w, r, &smpp.DataSM{}, b)
@@ -133,11 +132,12 @@ func main() {
 
 	backend = "http://" + *ph
 	_, e = url.Parse(backend)
-	if e != nil {
-		log.Println("invalid HTTP backend host, Rx request will be rejected")
+	if e != nil && len(*ph) != 0 {
+		log.Println("invalid HTTP backend host, SMPP answer will be always ACK")
 		backend = ""
 	} else {
 		log.Println("HTTP backend is", backend)
+		smpp.RequestHandler = handleSMPP
 	}
 
 	log.Println("local HTTP API port is", *lh)
