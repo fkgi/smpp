@@ -5,13 +5,26 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
+	"strings"
 )
 
 type PDU interface {
 	CommandID() CommandID
 	Marshal() []byte
 	Unmarshal([]byte) error
+	fmt.Stringer
+}
+
+type Request interface {
+	PDU
+	MakeResponse(StatusCode) Response
+}
+
+type Response interface {
+	PDU
+	CommandStatus() StatusCode
 }
 
 func (b *Bind) readPDU() (msg message, e error) {
@@ -52,26 +65,26 @@ func (b *Bind) readPDU() (msg message, e error) {
 	return
 }
 
-func (b *Bind) writePDU(id CommandID, stat, seq uint32, body []byte) (e error) {
-	if body == nil {
-		body = []byte{}
+func (b *Bind) writePDU(msg message) (e error) {
+	if msg.body == nil {
+		msg.body = []byte{}
 	}
 	buf := bufio.NewWriter(b.con)
 
 	// command_length
-	binary.Write(buf, binary.BigEndian, uint32(len(body)+16))
+	binary.Write(buf, binary.BigEndian, uint32(len(msg.body)+16))
 	// command_id
-	binary.Write(buf, binary.BigEndian, id)
+	binary.Write(buf, binary.BigEndian, msg.id)
 	// command_status
-	binary.Write(buf, binary.BigEndian, stat)
+	binary.Write(buf, binary.BigEndian, msg.stat)
 	// sequence_number
-	binary.Write(buf, binary.BigEndian, seq)
+	binary.Write(buf, binary.BigEndian, msg.seq)
 
-	buf.Write(body)
+	buf.Write(msg.body)
 	e = buf.Flush()
 
 	if e == nil && TxMessageNotify != nil {
-		TxMessageNotify(id, stat, seq, body)
+		TxMessageNotify(msg.id, msg.stat, msg.seq, msg.body)
 	}
 	return
 }
@@ -105,134 +118,8 @@ func writeTLV(id uint16, value []byte, buf *bytes.Buffer) {
 	buf.Write(value)
 }
 
-type Request interface {
-	PDU
-}
-
-type Response interface {
-	PDU
-	CommandStatus() uint32
-}
-
-type DataSM struct {
-	SvcType  string `json:"svc_type"`
-	SrcTON   byte   `json:"src_ton,omitempty"`
-	SrcNPI   byte   `json:"src_npi,omitempty"`
-	SrcAddr  string `json:"src_addr,omitempty"`
-	DstTON   byte   `json:"dst_ton"`
-	DstNPI   byte   `json:"dst_npi"`
-	DstAddr  string `json:"dst_addr"`
-	EsmClass byte   `json:"esm_class"`
-
-	RegisteredDelivery byte `json:"registered_delivery"`
-	DataCoding         byte `json:"data_coding"`
-
-	Param map[uint16][]byte `json:"options,omitempty"`
-}
-
-func (*DataSM) CommandID() CommandID {
-	return DataSm
-}
-
-func (d *DataSM) Marshal() []byte {
-	w := bytes.Buffer{}
-
-	writeCString([]byte(d.SvcType), &w)
-	w.WriteByte(d.SrcTON)
-	w.WriteByte(d.SrcNPI)
-	writeCString([]byte(d.SrcAddr), &w)
-	w.WriteByte(d.DstTON)
-	w.WriteByte(d.DstNPI)
-	writeCString([]byte(d.DstAddr), &w)
-	w.WriteByte(d.EsmClass)
-	w.WriteByte(d.RegisteredDelivery)
-	w.WriteByte(d.DataCoding)
-
-	for k, v := range d.Param {
-		writeTLV(k, v, &w)
-	}
-
-	return w.Bytes()
-}
-
-func (d *DataSM) Unmarshal(data []byte) (e error) {
-	buf := bytes.NewBuffer(data)
-	if d.SvcType, e = readCString(buf); e != nil {
-	} else if d.SrcTON, e = buf.ReadByte(); e != nil {
-	} else if d.SrcNPI, e = buf.ReadByte(); e != nil {
-	} else if d.SrcAddr, e = readCString(buf); e != nil {
-	} else if d.DstTON, e = buf.ReadByte(); e != nil {
-	} else if d.DstNPI, e = buf.ReadByte(); e != nil {
-	} else if d.DstAddr, e = readCString(buf); e != nil {
-	} else if d.EsmClass, e = buf.ReadByte(); e != nil {
-	} else if d.RegisteredDelivery, e = buf.ReadByte(); e != nil {
-	} else if d.DataCoding, e = buf.ReadByte(); e != nil {
-	} else {
-		d.Param = make(map[uint16][]byte)
-		for {
-			t, v, e2 := readTLV(buf)
-			if e2 == io.EOF {
-				break
-			}
-			if e2 != nil {
-				e = e2
-				break
-			}
-			d.Param[t] = v
-		}
-	}
-	return
-}
-
-type DataSM_resp struct {
-	Status    uint32 `json:"status"`
-	MessageID string `json:"id"`
-
-	Param map[uint16][]byte `json:"options,omitempty"`
-}
-
-func (*DataSM_resp) CommandID() CommandID {
-	return DataSmResp
-}
-
-func (d *DataSM_resp) Marshal() []byte {
-	w := bytes.Buffer{}
-
-	writeCString([]byte(d.MessageID), &w)
-
-	for k, v := range d.Param {
-		writeTLV(k, v, &w)
-	}
-
-	return w.Bytes()
-}
-
-func (d *DataSM_resp) Unmarshal(data []byte) (e error) {
-	buf := bytes.NewBuffer(data)
-	if d.MessageID, e = readCString(buf); e != nil {
-	} else {
-		d.Param = make(map[uint16][]byte)
-		for {
-			t, v, e2 := readTLV(buf)
-			if e2 == io.EOF {
-				break
-			}
-			if e2 != nil {
-				e = e2
-				break
-			}
-			d.Param[t] = v
-		}
-	}
-	return
-}
-
-func (d *DataSM_resp) CommandStatus() uint32 {
-	return d.Status
-}
-
 type smPDU struct {
-	SvcType  string `json:"svc_type"`
+	SvcType  string `json:"svc_type,omitempty"`
 	SrcTON   byte   `json:"src_ton,omitempty"`
 	SrcNPI   byte   `json:"src_npi,omitempty"`
 	SrcAddr  string `json:"src_addr,omitempty"`
@@ -250,9 +137,34 @@ type smPDU struct {
 	DataCoding           byte   `json:"data_coding"`
 	SmDefaultMsgId       byte   `json:"sm_default_sm_id,omitempty"`
 	// SmLength            byte
-	ShortMessage []byte `json:"short_message"`
+	ShortMessage []byte `json:"short_message,omitempty"`
 
 	Param map[uint16][]byte `json:"options,omitempty"`
+}
+
+func (d *smPDU) WriteTo(buf *strings.Builder) {
+	fmt.Fprintln(buf, "| service_type:           ", d.SvcType)
+	fmt.Fprintln(buf, "| source_addr_ton:        ", d.SrcTON)
+	fmt.Fprintln(buf, "| source_addr_npi:        ", d.SrcNPI)
+	fmt.Fprintln(buf, "| source_addr:            ", d.SrcAddr)
+	fmt.Fprintln(buf, "| dest_addr_ton:          ", d.DstTON)
+	fmt.Fprintln(buf, "| dest_addr_npi:          ", d.DstNPI)
+	fmt.Fprintln(buf, "| destination_addr:       ", d.DstAddr)
+	fmt.Fprintln(buf, "| esm_class:              ", d.EsmClass)
+	fmt.Fprintln(buf, "| protocol_id:            ", d.ProtocolId)
+	fmt.Fprintln(buf, "| priority_flag:          ", d.PriorityFlag)
+	fmt.Fprintln(buf, "| schedule_delivery_time: ", d.ScheduleDeliveryTime)
+	fmt.Fprintln(buf, "| validity_period:        ", d.ValidityPeriod)
+	fmt.Fprintln(buf, "| registered_delivery:    ", d.RegisteredDelivery)
+	fmt.Fprintln(buf, "| replace_if_present_flag:", d.ReplaceIfPresentFlag)
+	fmt.Fprintln(buf, "| data_coding:            ", d.DataCoding)
+	fmt.Fprintln(buf, "| sm_default_msg_id:      ", d.SmDefaultMsgId)
+	fmt.Fprintln(buf, "| sm_length:              ", len(d.ShortMessage))
+	fmt.Fprintf(buf, "| short_message:          %# x\n", d.ShortMessage)
+	fmt.Fprint(buf, "| optional_parameters:")
+	for t, v := range d.Param {
+		fmt.Fprintf(buf, "\n| | %#04x: %# x", t, v)
+	}
 }
 
 func (d *smPDU) Marshal() []byte {
@@ -324,86 +236,4 @@ func (d *smPDU) Unmarshal(data []byte) (e error) {
 		}
 	}
 	return
-}
-
-type SubmitSM struct {
-	smPDU
-}
-
-func (*SubmitSM) CommandID() CommandID {
-	return SubmitSm
-}
-
-func (d *SubmitSM) Marshal() []byte {
-	return d.smPDU.Marshal()
-}
-
-func (d *SubmitSM) Unmarshal(data []byte) (e error) {
-	return d.smPDU.Unmarshal(data)
-}
-
-type SubmitSM_resp struct {
-	Status    uint32 `json:"status"`
-	MessageID string `json:"id"`
-}
-
-func (*SubmitSM_resp) CommandID() CommandID {
-	return SubmitSmResp
-}
-
-func (d *SubmitSM_resp) Marshal() []byte {
-	w := bytes.Buffer{}
-	writeCString([]byte(d.MessageID), &w)
-	return w.Bytes()
-}
-
-func (d *SubmitSM_resp) Unmarshal(data []byte) (e error) {
-	buf := bytes.NewBuffer(data)
-	d.MessageID, e = readCString(buf)
-	return
-}
-
-func (d *SubmitSM_resp) CommandStatus() uint32 {
-	return d.Status
-}
-
-type DeliverSM struct {
-	smPDU
-}
-
-func (*DeliverSM) CommandID() CommandID {
-	return DeliverSm
-}
-
-func (d *DeliverSM) Marshal() []byte {
-	return d.smPDU.Marshal()
-}
-
-func (d *DeliverSM) Unmarshal(data []byte) (e error) {
-	return d.smPDU.Unmarshal(data)
-}
-
-type DeliverSM_resp struct {
-	Status    uint32 `json:"status"`
-	MessageID string `json:"id,omitempty"`
-}
-
-func (*DeliverSM_resp) CommandID() CommandID {
-	return DeliverSmResp
-}
-
-func (d *DeliverSM_resp) Marshal() []byte {
-	w := bytes.Buffer{}
-	writeCString([]byte(d.MessageID), &w)
-	return w.Bytes()
-}
-
-func (d *DeliverSM_resp) Unmarshal(data []byte) (e error) {
-	buf := bytes.NewBuffer(data)
-	d.MessageID, e = readCString(buf)
-	return
-}
-
-func (d *DeliverSM_resp) CommandStatus() uint32 {
-	return d.Status
 }

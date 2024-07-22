@@ -51,7 +51,10 @@ func Accept(c net.Conn) (b Bind, e error) {
 	case BindTransceiver:
 		b.BindType = TRxBind
 	default:
-		b.writePDU(GenericNack, 0x00000003, msg.seq, nil)
+		b.writePDU(message{
+			id:   GenericNack,
+			stat: StatInvCmdID,
+			seq:  msg.seq})
 		e = errors.New("invalid request")
 		return
 	}
@@ -73,7 +76,10 @@ func Accept(c net.Conn) (b Bind, e error) {
 	}
 
 	if e != nil {
-		b.writePDU(GenericNack, 0x0000000d, msg.seq, nil)
+		b.writePDU(message{
+			id:   GenericNack,
+			stat: StatBindFail,
+			seq:  msg.seq})
 		return
 	}
 
@@ -84,7 +90,10 @@ func Accept(c net.Conn) (b Bind, e error) {
 	// interface_version
 	writeTLV(0x0210, []byte{0x34}, &w)
 
-	if e = b.writePDU(id, 0, msg.seq, w.Bytes()); e != nil {
+	if e = b.writePDU(message{
+		id:   id,
+		seq:  msg.seq,
+		body: w.Bytes()}); e != nil {
 		return
 	}
 
@@ -131,7 +140,10 @@ func Connect(c net.Conn, info BindInfo) (b Bind, e error) {
 	// address_range
 	writeCString([]byte(b.AddressRange), &w)
 
-	if e = b.writePDU(id, 0, seq, w.Bytes()); e != nil {
+	if e = b.writePDU(message{
+		id:   id,
+		seq:  seq,
+		body: w.Bytes()}); e != nil {
 		return
 	}
 
@@ -253,20 +265,21 @@ func (b *Bind) Send(p Request) (a Response, e error) {
 
 	switch msg.id {
 	case SubmitSmResp:
-		a = &SubmitSM_resp{}
+		a = &SubmitSM_resp{Status: msg.stat}
 	case DeliverSmResp:
-		a = &DeliverSM_resp{}
+		a = &DeliverSM_resp{Status: msg.stat}
 	case DataSmResp:
-		a = &DataSM_resp{}
+		a = &DataSM_resp{Status: msg.stat}
 	case GenericNack:
 		e = errors.New("send failed")
+	case InternalFailure:
+		e = errors.New("request timeout")
 	default:
 		e = errors.New("unexpected response")
 	}
-	if e != nil {
-		return
+	if e == nil {
+		e = a.Unmarshal(msg.body)
 	}
 
-	e = a.Unmarshal(msg.body)
 	return
 }

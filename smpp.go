@@ -121,3 +121,158 @@ func (c CommandID) String() string {
 	}
 	return "reserved"
 }
+
+type StatusCode uint32
+
+const (
+	StatOK              StatusCode = 0x00000000 // No Error
+	StatInvMsgLen       StatusCode = 0x00000001 // Message Length is invalid
+	StatInvCmdLen       StatusCode = 0x00000002 // Command Length is invalid
+	StatInvCmdID        StatusCode = 0x00000003 // Invalid Command ID
+	StatInvBndSts       StatusCode = 0x00000004 // Incorrect BIND Status for given command
+	StatAlyBnd          StatusCode = 0x00000005 // ESME Already in Bound State
+	StatInvPrtFlg       StatusCode = 0x00000006 // Invalid Priority Flag
+	StatInvRegDlvFlg    StatusCode = 0x00000007 // Invalid Registered Delivery Flag
+	StatSysErr          StatusCode = 0x00000008 // System Error
+	StatInvSrcAdr       StatusCode = 0x0000000A // Invalid Source Address
+	StatInvDstAdr       StatusCode = 0x0000000B // Invalid Dest Addr
+	StatInvMsgID        StatusCode = 0x0000000C // Message ID is invalid
+	StatBindFail        StatusCode = 0x0000000D // Bind Failed
+	StatInvPaswd        StatusCode = 0x0000000E // Invalid Password
+	StatInvSysID        StatusCode = 0x0000000F // Invalid System ID
+	StatCancelFail      StatusCode = 0x00000011 // Cancel SM Failed
+	StatReplaceFail     StatusCode = 0x00000013 // Replace SM Failed
+	StatMsgQFul         StatusCode = 0x00000014 // Message Queue Full
+	StatInvSerTyp       StatusCode = 0x00000015 // Invalid Service Type
+	StatInvNumDests     StatusCode = 0x00000033 // Invalid number of destinations
+	StatInvDLName       StatusCode = 0x00000034 // Invalid Distribution List name
+	StatInvDestFlag     StatusCode = 0x00000040 // Destination flag is invalid(submit_multi)
+	StatInvSubRep       StatusCode = 0x00000042 // Invalid ‘submit with replace’ request(i.e. submit_sm with replace_if_present_flag set)
+	StatInvEsmClass     StatusCode = 0x00000043 // Invalid esm_class field data
+	StatCntSubDL        StatusCode = 0x00000044 // Cannot Submit to Distribution List
+	StatSubmitFail      StatusCode = 0x00000045 // submit_sm or submit_multi failed
+	StatInvSrcTON       StatusCode = 0x00000048 // Invalid Source address TON
+	StatInvSrcNPI       StatusCode = 0x00000049 // Invalid Source address NPI
+	StatInvDstTON       StatusCode = 0x00000050 // Invalid Destination address TON
+	StatInvDstNPI       StatusCode = 0x00000051 // Invalid Destination address NPI
+	StatInvSysTyp       StatusCode = 0x00000053 // Invalid system_type field
+	StatInvRepFlag      StatusCode = 0x00000054 // Invalid replace_if_present flag
+	StatInvNumMsgs      StatusCode = 0x00000055 // Invalid number of messages
+	StatThrottled       StatusCode = 0x00000058 // Throttling error (ESME has exceeded allowed message limits)
+	StatInvSched        StatusCode = 0x00000061 // Invalid Scheduled Delivery Time
+	StatInvExpiry       StatusCode = 0x00000062 // Invalid message validity period(Expiry time)
+	StatInvDFTMsgID     StatusCode = 0x00000063 // Predefined Message Invalid or Not Found
+	StatRx_T_AppN       StatusCode = 0x00000064 // ESME Receiver Temporary App Error Code
+	StatRx_P_AppN       StatusCode = 0x00000065 // ESME Receiver Permanent App Error Code
+	StatRx_R_AppN       StatusCode = 0x00000066 // ESME Receiver Reject Message Error Code
+	StatQueryFail       StatusCode = 0x00000067 // query_sm request failed
+	StatInvOptParStream StatusCode = 0x000000C0 // Error in the optional part of the PDU Body.
+	StatOptParNotAllwd  StatusCode = 0x000000C1 // Optional Parameter not allowed
+	StatInvParLen       StatusCode = 0x000000C2 // Invalid Parameter Length.
+	StatMissingOptParam StatusCode = 0x000000C3 // Expected Optional Parameter missing
+	StatInvOptParamVal  StatusCode = 0x000000C4 // Invalid Optional Parameter Value
+	StatDeliveryFailure StatusCode = 0x000000FE // Delivery Failure (used for data_sm_resp)
+	StatUnknownErr      StatusCode = 0x000000FF // Unknown Error
+)
+
+func (c StatusCode) String() string {
+	switch c {
+	case StatOK:
+		return "ESME_ROK"
+	case StatInvMsgLen:
+		return "ESME_RINVMSGLEN"
+	case StatInvCmdLen:
+		return "ESME_RINVCMDLEN"
+	case StatInvCmdID:
+		return "ESME_RINVCMDID"
+	case StatInvBndSts:
+		return "ESME_RINVBNDSTS"
+	case StatAlyBnd:
+		return "ESME_RALYBND"
+	case StatInvPrtFlg:
+		return "ESME_RINVPRTFLG"
+	case StatInvRegDlvFlg:
+		return "ESME_RINVREGDLVFLG"
+	case StatSysErr:
+		return "ESME_RSYSERR"
+	case StatInvSrcAdr:
+		return "ESME_RINVSRCADR"
+	case StatInvDstAdr:
+		return "ESME_RINVDSTADR"
+	case StatInvMsgID:
+		return "ESME_RINVMSGID"
+	case StatBindFail:
+		return "ESME_RBINDFAIL"
+	case StatInvPaswd:
+		return "ESME_RINVPASWD"
+	case StatInvSysID:
+		return "ESME_RINVSYSID"
+	case StatCancelFail:
+		return "ESME_RCANCELFAIL"
+	case StatReplaceFail:
+		return "ESME_RREPLACEFAIL"
+	case StatMsgQFul:
+		return "ESME_RMSGQFUL"
+	case StatInvSerTyp:
+		return "ESME_RINVSERTYP"
+	case StatInvNumDests:
+		return "ESME_RINVNUMDESTS"
+	case StatInvDLName:
+		return "ESME_RINVDLNAME"
+	case StatInvDestFlag:
+		return "ESME_RINVDESTFLAG"
+	case StatInvSubRep:
+		return "ESME_RINVSUBREP"
+	case StatInvEsmClass:
+		return "ESME_RINVESMCLASS"
+	case StatCntSubDL:
+		return "ESME_RCNTSUBDL"
+	case StatSubmitFail:
+		return "ESME_RSUBMITFAIL"
+	case StatInvSrcTON:
+		return "ESME_RINVSRCTON"
+	case StatInvSrcNPI:
+		return "ESME_RINVSRCNPI"
+	case StatInvDstTON:
+		return "ESME_RINVDSTTON"
+	case StatInvDstNPI:
+		return "ESME_RINVDSTNPI"
+	case StatInvSysTyp:
+		return "ESME_RINVSYSTYP"
+	case StatInvRepFlag:
+		return "ESME_RINVREPFLAG"
+	case StatInvNumMsgs:
+		return "ESME_RINVNUMMSGS"
+	case StatThrottled:
+		return "ESME_RTHROTTLED"
+	case StatInvSched:
+		return "ESME_RINVSCHED"
+	case StatInvExpiry:
+		return "ESME_RINVEXPIRY"
+	case StatInvDFTMsgID:
+		return "ESME_RINVDFTMSGID"
+	case StatRx_T_AppN:
+		return "ESME_RX_T_APPN"
+	case StatRx_P_AppN:
+		return "ESME_RX_P_APPN"
+	case StatRx_R_AppN:
+		return "ESME_RX_R_APPN"
+	case StatQueryFail:
+		return "ESME_RQUERYFAIL"
+	case StatInvOptParStream:
+		return "ESME_RINVOPTPARSTREAM"
+	case StatOptParNotAllwd:
+		return "ESME_ROPTPARNOTALLWD"
+	case StatInvParLen:
+		return "ESME_RINVPARLEN"
+	case StatMissingOptParam:
+		return "ESME_RMISSINGOPTPARAM"
+	case StatInvOptParamVal:
+		return "ESME_RINVOPTPARAMVAL"
+	case StatDeliveryFailure:
+		return "ESME_RDELIVERYFAILURE"
+	case StatUnknownErr:
+		return "ESME_RUNKNOWNERR"
+	}
+	return "Reserved"
+}

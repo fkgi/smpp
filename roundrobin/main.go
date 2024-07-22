@@ -19,8 +19,10 @@ import (
 )
 
 func printHelp() {
-	fmt.Printf("Usage: %s [OPTION]... ADDRESS\n", os.Args[0])
-	fmt.Println("ADDRESS: SMPP peer address when act as ESME, or SMPP local address when act as SMSC. Format is ADDRESS:PORT (default :2775).")
+	fmt.Printf("Usage: %s [OPTION]... [IP]:PORT\n", os.Args[0])
+	fmt.Println("Args")
+	fmt.Println("\tIP: SMPP peer address when act as ESME, or SMPP local address when act as SMSC.")
+	fmt.Println("\tPORT: SMPP peer port when act as ESME, or SMPP local port when act as SMSC. (default :2775)")
 	fmt.Println()
 	flag.PrintDefaults()
 }
@@ -102,10 +104,10 @@ func main() {
 	smpp.ConnectionDownNotify = func(_ *smpp.Bind) {
 		sigc <- nil
 	}
-	smpp.RxMessageNotify = func(id smpp.CommandID, stat, seq uint32, body []byte) {
+	smpp.RxMessageNotify = func(id smpp.CommandID, stat smpp.StatusCode, seq uint32, body []byte) {
 		log.Printf("Rx SMPP message: %s(status=%d, sequence=%d)", id, stat, seq)
 	}
-	smpp.TxMessageNotify = func(id smpp.CommandID, stat, seq uint32, body []byte) {
+	smpp.TxMessageNotify = func(id smpp.CommandID, stat smpp.StatusCode, seq uint32, body []byte) {
 		log.Printf("Tx SMPP message: %s(status=%d, sequence=%d)", id, stat, seq)
 	}
 
@@ -121,7 +123,7 @@ func main() {
 
 	backend = "http://" + *ph
 	_, e = url.Parse(backend)
-	if e != nil && len(*ph) != 0 {
+	if e != nil || len(*ph) == 0 {
 		log.Println("invalid HTTP backend host, SMPP answer will be always ACK")
 		backend = ""
 	} else {
@@ -153,10 +155,10 @@ func main() {
 		}
 		buf := new(strings.Builder)
 		fmt.Fprintln(buf, "bind is up")
-		fmt.Fprintln(buf, "ESME system ID  :", b.PeerID)
-		fmt.Fprintln(buf, "ESME password   :", b.Password)
-		fmt.Fprintln(buf, "ESME system type:", b.SystemType)
-		fmt.Fprintf(buf, "ESME address    : %s(ton=%d, npi=%d)",
+		fmt.Fprintln(buf, "| ESME system ID  :", b.PeerID)
+		fmt.Fprintln(buf, "| ESME password   :", b.Password)
+		fmt.Fprintln(buf, "| ESME system type:", b.SystemType)
+		fmt.Fprintf(buf, "| ESME address    : %s(ton=%d, npi=%d)",
 			b.AddressRange, b.TypeOfNumber, b.NumberingPlan)
 		log.Print(buf)
 
@@ -171,7 +173,7 @@ func main() {
 		}
 		buf := new(strings.Builder)
 		fmt.Fprintln(buf, "bind is up")
-		fmt.Fprintln(buf, "SMSC system ID:", b.PeerID)
+		fmt.Fprintln(buf, "| SMSC system ID:", b.PeerID)
 		log.Print(buf)
 	}
 
@@ -185,7 +187,7 @@ func main() {
 	log.Println("exit...")
 }
 
-func handleHTTP(w http.ResponseWriter, r *http.Request, d smpp.Request, b smpp.Bind) {
+func handleHTTP(w http.ResponseWriter, r *http.Request, req smpp.Request, b smpp.Bind) {
 	if r.Method != http.MethodPost {
 		log.Println("invalid HTTP request method", r.Method)
 		w.Header().Add("Allow", "POST")
@@ -199,17 +201,19 @@ func handleHTTP(w http.ResponseWriter, r *http.Request, d smpp.Request, b smpp.B
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	if e = json.Unmarshal(jsondata, &d); e != nil {
+	if e = json.Unmarshal(jsondata, &req); e != nil {
 		log.Println("failed to unmarshal JSON HTTP request", e)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	res, e := b.Send(d)
+	log.Println("Tx", req)
+	res, e := b.Send(req)
 	if e != nil {
 		log.Println("failed to send SMPP request", e)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	log.Println("Rx", res)
 	jsondata, e = json.Marshal(res)
 	if e != nil {
 		log.Println("failed to marshal JSON SMPP response", e)
@@ -219,57 +223,48 @@ func handleHTTP(w http.ResponseWriter, r *http.Request, d smpp.Request, b smpp.B
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(jsondata)
-
 }
 
-func handleSMPP(info smpp.BindInfo, req smpp.Request) (stat uint32, res smpp.Response) {
-	jsondata, e := json.Marshal(req)
-	if e != nil {
-		log.Println("failed to marshal JSON SMPP request", e)
-		stat = 0x00000008
-		return
-	}
+func handleSMPP(info smpp.BindInfo, req smpp.Request) (res smpp.Response) {
+	log.Println("Rx", req)
+
 	var path string
 	switch req.(type) {
 	case *smpp.DataSM:
 		path = "/data"
-		res = &smpp.DataSM_resp{}
+		res = &smpp.DataSM_resp{Status: smpp.StatSysErr}
 	case *smpp.DeliverSM:
 		path = "/deliver"
-		res = &smpp.DeliverSM_resp{}
+		res = &smpp.DeliverSM_resp{Status: smpp.StatSysErr}
 	case *smpp.SubmitSM:
 		path = "/submit"
-		res = &smpp.SubmitSM_resp{}
+		res = &smpp.SubmitSM_resp{Status: smpp.StatSysErr}
 	default:
 		log.Println("unknown SMPP request")
-		stat = 0x00000008
+		return
+	}
+
+	jsondata, e := json.Marshal(req)
+	if e != nil {
+		log.Println("failed to marshal JSON SMPP request", e)
+		log.Println("Tx", res)
 		return
 	}
 
 	r, e := http.Post(backend+path, "application/json", bytes.NewBuffer(jsondata))
 	if e != nil {
-		log.Println("failed to send HTTP request", e)
-		res = nil
-		stat = 0x00000008
+		log.Println("failed to send HTTP request,", e)
+		log.Println("Tx", res)
 		return
 	}
 
 	jsondata, e = io.ReadAll(r.Body)
 	defer r.Body.Close()
 	if e != nil {
-		log.Println("failed to read HTTP response", e)
-		res = nil
-		stat = 0x00000008
-		return
+		log.Println("failed to read HTTP response,", e)
+	} else if e = json.Unmarshal(jsondata, res); e != nil {
+		log.Println("failed to unmarshal JSON HTTP response,", e)
 	}
-
-	if e = json.Unmarshal(jsondata, res); e != nil {
-		log.Println("failed to unmarshal JSON HTTP response", e)
-		res = nil
-		stat = 0x00000008
-		return
-	}
-
-	stat = 0
+	log.Println("Tx", res)
 	return
 }

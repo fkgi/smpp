@@ -1,12 +1,14 @@
 package smpp
 
 import (
+	"fmt"
+	"math/rand"
 	"time"
 )
 
 type message struct {
 	id   CommandID
-	stat uint32
+	stat StatusCode
 	seq  uint32
 	body []byte
 
@@ -46,25 +48,33 @@ func (b *Bind) serve() {
 				if msg.id < 0x80000000 {
 					// Tx req
 					b.reqStack[msg.seq] = msg.callback
-					e = b.writePDU(msg.id, 0, msg.seq, msg.body)
+					e = b.writePDU(msg)
 				} else {
 					// Tx ans
-					e = b.writePDU(msg.id, msg.stat, msg.seq, msg.body)
+					e = b.writePDU(msg)
 				}
 			} else {
 				// Rx event
 				if msg.id == CloseConnection {
 					break
 				} else if msg.id == EnquireLink {
-					e = b.writePDU(EnquireLinkResp, 0, msg.seq, nil)
+					e = b.writePDU(message{
+						id:  EnquireLinkResp,
+						seq: msg.seq})
 				} else if msg.id == Unbind {
-					b.writePDU(UnbindResp, 0, msg.seq, nil)
+					b.writePDU(message{
+						id:  UnbindResp,
+						seq: msg.seq})
 					b.con.Close()
 				} else if msg.id < 0x80000000 {
 					// Rx other req
-					e = b.writePDU(GenericNack, 0x00000003, msg.seq, nil)
+					e = b.writePDU(message{
+						id:   GenericNack,
+						stat: StatInvCmdID,
+						seq:  msg.seq})
 				} else if callback, ok := b.reqStack[msg.seq]; ok {
 					// Handle Rx ans
+					delete(b.reqStack, msg.seq)
 					callback <- msg
 				}
 			}
@@ -80,31 +90,31 @@ func (b *Bind) serve() {
 	// worker for Rx request handling
 	go func() {
 		for msg, ok := <-b.requestQ; ok; msg, ok = <-b.requestQ {
-			var d Request
+			var req Request
 			switch msg.id {
 			case SubmitSm:
-				d = &SubmitSM{}
+				req = &SubmitSM{}
 			case DeliverSm:
-				d = &DeliverSM{}
+				req = &DeliverSM{}
 			case DataSm:
-				d = &DataSM{}
+				req = &DataSM{}
+			}
+			if req == nil {
+				panic(fmt.Sprintf("unexpected request PDU (ID:%#x)", msg.id))
 			}
 
-			if e := d.Unmarshal(msg.body); e != nil {
-				msg.id = GenericNack
-				msg.stat = 0x00000008
-				msg.body = nil
-			} else if stat, res := RequestHandler(b.BindInfo, d); res == nil {
-				msg.id = GenericNack
-				msg.stat = 0x00000008
-				msg.body = nil
-			} else {
-				msg.id = res.CommandID()
-				msg.body = res.Marshal()
-				msg.stat = stat
+			var res Response
+			if e := req.Unmarshal(msg.body); e != nil {
+				res = req.MakeResponse(StatSysErr)
+			} else if res = RequestHandler(b.BindInfo, req); res == nil {
+				res = req.MakeResponse(StatSysErr)
 			}
-			msg.callback = make(chan message)
-			b.eventQ <- msg
+			b.eventQ <- message{
+				id:       res.CommandID(),
+				stat:     res.CommandStatus(),
+				seq:      msg.seq,
+				body:     res.Marshal(),
+				callback: make(chan message)}
 		}
 	}()
 
@@ -112,16 +122,12 @@ func (b *Bind) serve() {
 	for msg, e := b.readPDU(); e == nil; msg, e = b.readPDU() {
 		switch msg.id {
 		// case QuerySm:
-		case SubmitSm:
-			b.requestQ <- msg
-		case DeliverSm:
+		case SubmitSm, DeliverSm, DataSm:
 			b.requestQ <- msg
 		// case ReplaceSm:
 		// case CancelSm:
 		// case Outbind:
 		// case SubmitMulti:
-		case DataSm:
-			b.requestQ <- msg
 		default:
 			b.eventQ <- msg
 		}
@@ -145,18 +151,24 @@ var HandleDeliver func(info BindInfo, pdu DeliverSM) (uint32, DeliverSM_resp) = 
 var HandleData func(info BindInfo, pdu DataSM) (uint32, DataSM_resp) = nil
 */
 
-var RequestHandler = func(info BindInfo, pdu Request) (uint32, Response) {
+var RequestHandler = func(info BindInfo, pdu Request) Response {
+	const l = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+	id := make([]byte, 16)
+	for i := range id {
+		id[i] = l[rand.Intn(len(l))]
+	}
 	switch pdu.(type) {
 	case *DataSM:
-		return 0, &DataSM_resp{
-			MessageID: "random id",
+		return &DataSM_resp{
+			MessageID: string(id),
 		}
 	case *SubmitSM:
-		return 0, &SubmitSM_resp{
-			MessageID: "random id",
+		return &SubmitSM_resp{
+			MessageID: string(id),
 		}
 	case *DeliverSM:
-		return 0, &DeliverSM_resp{}
+		return &DeliverSM_resp{}
 	}
-	return 0, nil
+	return nil
 }
