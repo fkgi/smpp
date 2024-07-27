@@ -160,10 +160,10 @@ func (d *smPDU) WriteTo(buf *strings.Builder) {
 	fmt.Fprintln(buf, "| data_coding:            ", d.DataCoding)
 	fmt.Fprintln(buf, "| sm_default_msg_id:      ", d.SmDefaultMsgId)
 	fmt.Fprintln(buf, "| sm_length:              ", len(d.ShortMessage))
-	fmt.Fprintf(buf, "| short_message:          %# x\n", d.ShortMessage)
+	fmt.Fprintf(buf, "| short_message:          0x% x\n", d.ShortMessage)
 	fmt.Fprint(buf, "| optional_parameters:")
 	for t, v := range d.Param {
-		fmt.Fprintf(buf, "\n| | %#04x: %# x", t, v)
+		fmt.Fprintf(buf, "\n| | %#04x: 0x% x", t, v)
 	}
 }
 

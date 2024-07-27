@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -44,6 +45,9 @@ func main() {
 	tn := flag.Int("ton", 0, "Type of Number for ESME address")
 	np := flag.Int("npi", 0, "Numbering Plan Indicator for ESME address")
 	ar := flag.String("addr", "", "UNIX Regular Expression notation of ESME address")
+	ts := flag.Bool("tls", false, "enable TLS")
+	cr := flag.String("crt", "", "TLS crt file")
+	ky := flag.String("key", "", "TLS key file")
 	help := flag.Bool("h", false, "Print usage")
 	flag.Parse()
 
@@ -141,18 +145,40 @@ func main() {
 
 	if info.BindType == smpp.NilBind {
 		// run as SMSC
-		log.Println("listening SMPP on", addr)
-		if l, e := net.Listen("tcp", addr); e != nil {
-			log.Fatalln(e)
-		} else if c, e := l.Accept(); e != nil {
-			log.Fatalln(e)
-		} else {
-			l.Close()
-			log.Println("accepting SMPP from", c.RemoteAddr())
-			if b, e = smpp.Accept(c); e != nil {
+		var l net.Listener
+		var e error
+		if *ts {
+			buf := new(strings.Builder)
+			fmt.Fprintln(buf, "listening SMPP on", addr, "with TLS")
+			fmt.Fprintln(buf, "| Cert file:", *cr)
+			fmt.Fprintln(buf, "| Key file :", *ky)
+			log.Print(buf)
+
+			var cer tls.Certificate
+			cer, e = tls.LoadX509KeyPair(*cr, *ky)
+			if e != nil {
 				log.Fatalln(e)
 			}
+			l, e = tls.Listen("tcp", addr, &tls.Config{
+				InsecureSkipVerify: true,
+				Certificates:       []tls.Certificate{cer}})
+		} else {
+			log.Println("listening SMPP on", addr, "without TLS")
+			l, e = net.Listen("tcp", addr)
 		}
+		if e != nil {
+			log.Fatalln(e)
+		}
+		c, e := l.Accept()
+		if e != nil {
+			log.Fatalln(e)
+		}
+		l.Close()
+		log.Println("accepting SMPP from", c.RemoteAddr())
+		if b, e = smpp.Accept(c); e != nil {
+			log.Fatalln(e)
+		}
+
 		buf := new(strings.Builder)
 		fmt.Fprintln(buf, "bind is up")
 		fmt.Fprintln(buf, "| ESME system ID  :", b.PeerID)
@@ -165,12 +191,23 @@ func main() {
 		log.Println("bind is up")
 	} else {
 		// run as ESME
-		log.Println("connecting SMPP to", addr)
-		if c, e := net.Dial("tcp", addr); e != nil {
-			log.Fatalln(e)
-		} else if b, e = smpp.Connect(c, info); e != nil {
+		var c net.Conn
+		var e error
+		if *ts {
+			log.Println("connecting SMPP to", addr, "with TLS")
+			c, e = tls.Dial("tcp", addr, &tls.Config{
+				InsecureSkipVerify: true})
+		} else {
+			log.Println("connecting SMPP to", addr, "without TLS")
+			c, e = net.Dial("tcp", addr)
+		}
+		if e != nil {
 			log.Fatalln(e)
 		}
+		if b, e = smpp.Connect(c, info); e != nil {
+			log.Fatalln(e)
+		}
+
 		buf := new(strings.Builder)
 		fmt.Fprintln(buf, "bind is up")
 		fmt.Fprintln(buf, "| SMSC system ID:", b.PeerID)

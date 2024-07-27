@@ -38,7 +38,7 @@ func (d *DataSM) String() string {
 	fmt.Fprintln(buf, "| data_coding:        ", d.DataCoding)
 	fmt.Fprint(buf, "| optional_parameters:")
 	for t, v := range d.Param {
-		fmt.Fprintf(buf, "\n| | %#04x: %# x", t, v)
+		fmt.Fprintf(buf, "\n| | %#04x: 0x% x", t, v)
 	}
 	return buf.String()
 }
