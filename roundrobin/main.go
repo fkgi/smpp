@@ -36,18 +36,18 @@ func main() {
 	if smpp.ID, e = os.Hostname(); e != nil {
 		smpp.ID = "roundrobin"
 	}
-	id := flag.String("id", smpp.ID, "System ID")
-	lh := flag.String("http", ":8080", "HTTP local address")
-	ph := flag.String("backend", "", "HTTP backend address")
-	bt := flag.String("bind", "svr", "Bind type of client [tx/rx/trx] or server [svr]")
-	pw := flag.String("pwd", "", "Password for ESME authentication")
-	st := flag.String("type", "DEBUGGER", "Type of ESME system")
-	tn := flag.Int("ton", 0, "Type of Number for ESME address")
-	np := flag.Int("npi", 0, "Numbering Plan Indicator for ESME address")
-	ar := flag.String("addr", "", "UNIX Regular Expression notation of ESME address")
-	ts := flag.Bool("tls", false, "enable TLS")
-	cr := flag.String("crt", "", "TLS crt file")
-	ky := flag.String("key", "", "TLS key file")
+	id := flag.String("s", smpp.ID, "System ID")
+	lh := flag.String("i", ":8080", "HTTP local address")
+	ph := flag.String("b", "", "HTTP backend address")
+	bt := flag.String("d", "svr", "Bind type of client [tx/rx/trx] or server [svr]")
+	pw := flag.String("p", "", "Password for ESME authentication")
+	st := flag.String("y", "DEBUGGER", "Type of ESME system")
+	tn := flag.Int("o", 0, "Type of Number for ESME address")
+	np := flag.Int("n", 0, "Numbering Plan Indicator for ESME address")
+	ar := flag.String("a", "", "UNIX Regular Expression notation of ESME address")
+	ts := flag.Bool("t", false, "enable TLS")
+	cr := flag.String("c", "", "TLS crt file")
+	ky := flag.String("k", "", "TLS key file")
 	help := flag.Bool("h", false, "Print usage")
 	flag.Parse()
 
@@ -87,12 +87,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	log.Println("booting Round-Robin diagnostic/debug subsystem for SMPP...")
+	log.Println("[INFO]", "booting Round-Robin diagnostic/debug subsystem for SMPP...")
 	if info.BindType == smpp.NilBind {
 		buf := new(strings.Builder)
 		fmt.Fprintln(buf, "running as SMSC")
 		fmt.Fprintln(buf, "| system ID:", *id)
-		log.Print(buf)
+		log.Print("[INFO]", buf)
 	} else {
 		buf := new(strings.Builder)
 		fmt.Fprintln(buf, "running as ESME")
@@ -100,7 +100,7 @@ func main() {
 		fmt.Fprintln(buf, "| password   :", *pw)
 		fmt.Fprintln(buf, "| system type:", *st)
 		fmt.Fprintf(buf, "| address    : %s(ton=%d, npi=%d)", *ar, *tn, *np)
-		log.Print(buf)
+		log.Print("[INFO]", buf)
 	}
 
 	var b smpp.Bind
@@ -109,37 +109,37 @@ func main() {
 		sigc <- nil
 	}
 	smpp.RxMessageNotify = func(id smpp.CommandID, stat smpp.StatusCode, seq uint32, body []byte) {
-		log.Printf("Rx SMPP message: %s(status=%d, sequence=%d)", id, stat, seq)
+		log.Printf("[INFO] Rx SMPP message: %s(status=%d, sequence=%d)", id, stat, seq)
 	}
 	smpp.TxMessageNotify = func(id smpp.CommandID, stat smpp.StatusCode, seq uint32, body []byte) {
-		log.Printf("Tx SMPP message: %s(status=%d, sequence=%d)", id, stat, seq)
+		log.Printf("[INFO] Tx SMPP message: %s(status=%d, sequence=%d)", id, stat, seq)
 	}
 
-	http.HandleFunc("/data", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/smppmsg/v1/data", func(w http.ResponseWriter, r *http.Request) {
 		handleHTTP(w, r, &smpp.DataSM{}, b)
 	})
-	http.HandleFunc("/deliver", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/smppmsg/v1/deliver", func(w http.ResponseWriter, r *http.Request) {
 		handleHTTP(w, r, &smpp.DeliverSM{}, b)
 	})
-	http.HandleFunc("/submit", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/smppmsg/v1/submit", func(w http.ResponseWriter, r *http.Request) {
 		handleHTTP(w, r, &smpp.SubmitSM{}, b)
 	})
 
 	backend = "http://" + *ph
 	_, e = url.Parse(backend)
 	if e != nil || len(*ph) == 0 {
-		log.Println("invalid HTTP backend host, SMPP answer will be always ACK")
+		log.Println("[ERR]", "invalid HTTP backend host, SMPP answer will be always ACK")
 		backend = ""
 	} else {
-		log.Println("HTTP backend is", backend)
+		log.Println("[INFO]", "HTTP backend is", backend)
 		smpp.RequestHandler = handleSMPP
 	}
 
-	log.Println("local HTTP API address is", *lh)
+	log.Println("[INFO]", "local HTTP API address is", *lh)
 	go func() {
 		e := http.ListenAndServe(*lh, nil)
 		if e != nil {
-			log.Println("failed to listen HTTP, Tx request is not available:", e)
+			log.Println("[ERR]", "failed to listen HTTP, Tx request is not available:", e)
 		}
 	}()
 
@@ -152,7 +152,7 @@ func main() {
 			fmt.Fprintln(buf, "listening SMPP on", addr, "with TLS")
 			fmt.Fprintln(buf, "| Cert file:", *cr)
 			fmt.Fprintln(buf, "| Key file :", *ky)
-			log.Print(buf)
+			log.Print("[INFO]", buf)
 
 			var cer tls.Certificate
 			cer, e = tls.LoadX509KeyPair(*cr, *ky)
@@ -163,7 +163,7 @@ func main() {
 				InsecureSkipVerify: true,
 				Certificates:       []tls.Certificate{cer}})
 		} else {
-			log.Println("listening SMPP on", addr, "without TLS")
+			log.Println("[INFO]", "listening SMPP on", addr, "without TLS")
 			l, e = net.Listen("tcp", addr)
 		}
 		if e != nil {
@@ -174,7 +174,7 @@ func main() {
 			log.Fatalln(e)
 		}
 		l.Close()
-		log.Println("accepting SMPP from", c.RemoteAddr())
+		log.Println("[INFO]", "accepting SMPP from", c.RemoteAddr())
 		if b, e = smpp.Accept(c); e != nil {
 			log.Fatalln(e)
 		}
@@ -186,19 +186,17 @@ func main() {
 		fmt.Fprintln(buf, "| ESME system type:", b.SystemType)
 		fmt.Fprintf(buf, "| ESME address    : %s(ton=%d, npi=%d)",
 			b.AddressRange, b.TypeOfNumber, b.NumberingPlan)
-		log.Print(buf)
-
-		log.Println("bind is up")
+		log.Println("[INFO]", buf)
 	} else {
 		// run as ESME
 		var c net.Conn
 		var e error
 		if *ts {
-			log.Println("connecting SMPP to", addr, "with TLS")
+			log.Println("[INFO]", "connecting SMPP to", addr, "with TLS")
 			c, e = tls.Dial("tcp", addr, &tls.Config{
 				InsecureSkipVerify: true})
 		} else {
-			log.Println("connecting SMPP to", addr, "without TLS")
+			log.Println("[INFO]", "connecting SMPP to", addr, "without TLS")
 			c, e = net.Dial("tcp", addr)
 		}
 		if e != nil {
@@ -211,22 +209,22 @@ func main() {
 		buf := new(strings.Builder)
 		fmt.Fprintln(buf, "bind is up")
 		fmt.Fprintln(buf, "| SMSC system ID:", b.PeerID)
-		log.Print(buf)
+		log.Print("[INFO]", buf)
 	}
 
 	signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	call := <-sigc
 	if call != nil {
-		log.Println("closing bind")
+		log.Println("[INFO]", "closing bind")
 		b.Close()
 	}
-	log.Println("bind is down")
-	log.Println("exit...")
+	log.Println("[INFO]", "bind is down")
+	log.Println("[INFO]", "exit...")
 }
 
 func handleHTTP(w http.ResponseWriter, r *http.Request, req smpp.Request, b smpp.Bind) {
 	if r.Method != http.MethodPost {
-		log.Println("invalid HTTP request method", r.Method)
+		log.Println("[NOTIF]", "invalid HTTP request method", r.Method)
 		w.Header().Add("Allow", "POST")
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -234,26 +232,26 @@ func handleHTTP(w http.ResponseWriter, r *http.Request, req smpp.Request, b smpp
 	jsondata, e := io.ReadAll(r.Body)
 	defer r.Body.Close()
 	if e != nil {
-		log.Println("failed to read HTTP request", e)
+		log.Println("[ERR]", "failed to read HTTP request", e)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 	if e = json.Unmarshal(jsondata, &req); e != nil {
-		log.Println("failed to unmarshal JSON HTTP request", e)
+		log.Println("[ERR]", "failed to unmarshal JSON HTTP request", e)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	log.Println("Tx", req)
+	log.Println("[INFO]", "Tx", req)
 	res, e := b.Send(req)
 	if e != nil {
-		log.Println("failed to send SMPP request", e)
+		log.Println("[ERR]", "failed to send SMPP request", e)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	log.Println("Rx", res)
+	log.Println("[INFO]", "Rx", res)
 	jsondata, e = json.Marshal(res)
 	if e != nil {
-		log.Println("failed to marshal JSON SMPP response", e)
+		log.Println("[ERR]", "failed to marshal JSON SMPP response", e)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -263,45 +261,45 @@ func handleHTTP(w http.ResponseWriter, r *http.Request, req smpp.Request, b smpp
 }
 
 func handleSMPP(info smpp.BindInfo, req smpp.Request) (res smpp.Response) {
-	log.Println("Rx", req)
+	log.Println("[INFO]", "Rx", req)
 
 	var path string
 	switch req.(type) {
 	case *smpp.DataSM:
-		path = "/data"
+		path = "/smppmsg/v1/data"
 		res = &smpp.DataSM_resp{Status: smpp.StatSysErr}
 	case *smpp.DeliverSM:
-		path = "/deliver"
+		path = "/smppmsg/v1/deliver"
 		res = &smpp.DeliverSM_resp{Status: smpp.StatSysErr}
 	case *smpp.SubmitSM:
-		path = "/submit"
+		path = "/smppmsg/v1/submit"
 		res = &smpp.SubmitSM_resp{Status: smpp.StatSysErr}
 	default:
-		log.Println("unknown SMPP request")
+		log.Println("[ERR]", "unknown SMPP request")
 		return
 	}
 
 	jsondata, e := json.Marshal(req)
 	if e != nil {
-		log.Println("failed to marshal JSON SMPP request", e)
-		log.Println("Tx", res)
+		log.Println("[ERR]", "failed to marshal JSON SMPP request", e)
+		log.Println("[INFO]", "Tx", res)
 		return
 	}
 
 	r, e := http.Post(backend+path, "application/json", bytes.NewBuffer(jsondata))
 	if e != nil {
-		log.Println("failed to send HTTP request,", e)
-		log.Println("Tx", res)
+		log.Println("[ERR]", "failed to send HTTP request,", e)
+		log.Println("[INFO]", "Tx", res)
 		return
 	}
 
 	jsondata, e = io.ReadAll(r.Body)
 	defer r.Body.Close()
 	if e != nil {
-		log.Println("failed to read HTTP response,", e)
+		log.Println("[ERR]", "failed to read HTTP response,", e)
 	} else if e = json.Unmarshal(jsondata, res); e != nil {
-		log.Println("failed to unmarshal JSON HTTP response,", e)
+		log.Println("[ERR]", "failed to unmarshal JSON HTTP response,", e)
 	}
-	log.Println("Tx", res)
+	log.Println("[INFO]", "Tx", res)
 	return
 }
