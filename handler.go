@@ -1,8 +1,6 @@
 package smpp
 
 import (
-	"fmt"
-	"math/rand"
 	"time"
 )
 
@@ -13,9 +11,12 @@ type message struct {
 	body []byte
 
 	callback chan message
+	bind     *Bind
 }
 
-func (b *Bind) serve() {
+func (b *Bind) serve() error {
+	b.eventQ = make(chan message, 1024)
+	b.reqStack = make(map[uint32]chan message)
 
 	enquireT := time.AfterFunc(KeepAlive, func() {
 		msg := message{
@@ -87,43 +88,13 @@ func (b *Bind) serve() {
 		}
 	}()
 
-	// worker for Rx request handling
-	go func() {
-		for msg, ok := <-b.requestQ; ok; msg, ok = <-b.requestQ {
-			var req Request
-			switch msg.id {
-			case SubmitSm:
-				req = &SubmitSM{}
-			case DeliverSm:
-				req = &DeliverSM{}
-			case DataSm:
-				req = &DataSM{}
-			}
-			if req == nil {
-				panic(fmt.Sprintf("unexpected request PDU (ID:%#x)", msg.id))
-			}
-
-			var res Response
-			if e := req.Unmarshal(msg.body); e != nil {
-				res = req.MakeResponse(StatSysErr)
-			} else if res = RequestHandler(b.BindInfo, req); res == nil {
-				res = req.MakeResponse(StatSysErr)
-			}
-			b.eventQ <- message{
-				id:       res.CommandID(),
-				stat:     res.CommandStatus(),
-				seq:      msg.seq,
-				body:     res.Marshal(),
-				callback: make(chan message)}
-		}
-	}()
-
 	// worker for Rx data from socket
 	for msg, e := b.readPDU(); e == nil; msg, e = b.readPDU() {
 		switch msg.id {
 		// case QuerySm:
 		case SubmitSm, DeliverSm, DataSm:
-			b.requestQ <- msg
+			msg.bind = b
+			sharedQ <- msg
 		// case ReplaceSm:
 		// case CancelSm:
 		// case Outbind:
@@ -136,39 +107,31 @@ func (b *Bind) serve() {
 	enquireT.Stop()
 	b.BindType = NilBind
 	b.con.Close()
-	close(b.requestQ)
 	b.eventQ <- message{id: CloseConnection}
-	// close(b.eventQ)
 
-	if ConnectionDownNotify != nil {
-		ConnectionDownNotify(b)
-	}
+	return nil
 }
 
-/*
-var HandleSubmit func(info BindInfo, pdu SubmitSM) (uint32, SubmitSM_resp) = nil
-var HandleDeliver func(info BindInfo, pdu DeliverSM) (uint32, DeliverSM_resp) = nil
-var HandleData func(info BindInfo, pdu DataSM) (uint32, DataSM_resp) = nil
-*/
-
 var RequestHandler = func(info BindInfo, pdu Request) Response {
-	const l = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	/*
+		const l = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
-	id := make([]byte, 16)
-	for i := range id {
-		id[i] = l[rand.Intn(len(l))]
-	}
-	switch pdu.(type) {
-	case *DataSM:
-		return &DataSM_resp{
-			MessageID: string(id),
+		id := make([]byte, 16)
+		for i := range id {
+			id[i] = l[rand.Intn(len(l))]
 		}
-	case *SubmitSM:
-		return &SubmitSM_resp{
-			MessageID: string(id),
+		switch pdu.(type) {
+		case *DataSM:
+			return &DataSM_resp{
+				MessageID: string(id),
+			}
+		case *SubmitSM:
+			return &SubmitSM_resp{
+				MessageID: string(id),
+			}
+		case *DeliverSM:
+			return &DeliverSM_resp{}
 		}
-	case *DeliverSM:
-		return &DeliverSM_resp{}
-	}
+	*/
 	return nil
 }

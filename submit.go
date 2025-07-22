@@ -12,7 +12,7 @@ type SubmitSM struct {
 
 func (d *SubmitSM) String() string {
 	buf := new(strings.Builder)
-	fmt.Fprintln(buf, "SUBMIT_SM")
+	fmt.Fprintln(buf, "submit_sm")
 	d.smPDU.WriteTo(buf)
 	return buf.String()
 }
@@ -40,7 +40,7 @@ type SubmitSM_resp struct {
 
 func (d *SubmitSM_resp) String() string {
 	buf := new(strings.Builder)
-	fmt.Fprintln(buf, "SUBMIT_SM_RESP, stat=", d.Status)
+	fmt.Fprintln(buf, "submit_sm_resp, stat=", d.Status)
 	fmt.Fprint(buf, "| id:", d.MessageID)
 	return buf.String()
 }
@@ -51,7 +51,9 @@ func (*SubmitSM_resp) CommandID() CommandID {
 
 func (d *SubmitSM_resp) Marshal() []byte {
 	w := bytes.Buffer{}
-	writeCString([]byte(d.MessageID), &w)
+	if d.Status == 0 {
+		writeCString([]byte(d.MessageID), &w)
+	}
 	return w.Bytes()
 }
 

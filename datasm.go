@@ -25,7 +25,7 @@ type DataSM struct {
 
 func (d *DataSM) String() string {
 	buf := new(strings.Builder)
-	fmt.Fprintln(buf, "DATA_SM")
+	fmt.Fprintln(buf, "data_sm")
 	fmt.Fprintln(buf, "| service_type:       ", d.SvcType)
 	fmt.Fprintln(buf, "| source_addr_ton:    ", d.SrcTON)
 	fmt.Fprintln(buf, "| source_addr_npi:    ", d.SrcNPI)
@@ -110,7 +110,7 @@ type DataSM_resp struct {
 
 func (d *DataSM_resp) String() string {
 	buf := new(strings.Builder)
-	fmt.Fprintln(buf, "DATA_SM_RESP: stat=", d.Status)
+	fmt.Fprintln(buf, "data_sm_resp: stat=", d.Status)
 	fmt.Fprintln(buf, "| id:", d.MessageID)
 	fmt.Fprint(buf, "| optional_parameters:")
 	for t, v := range d.Param {

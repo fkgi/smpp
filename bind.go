@@ -17,6 +17,19 @@ const (
 	TRxBind
 )
 
+func (t bindtype) String() string {
+	switch t {
+	case TxBind:
+		return "Tx"
+	case RxBind:
+		return "Rx"
+	case TRxBind:
+		return "TRx"
+	default:
+		return "undefined"
+	}
+}
+
 type BindInfo struct {
 	BindType bindtype
 	PeerID   string
@@ -32,15 +45,15 @@ type Bind struct {
 	BindInfo
 	con      net.Conn
 	eventQ   chan message
-	requestQ chan message
 	reqStack map[uint32]chan message
 }
 
-func Accept(c net.Conn) (b Bind, e error) {
+func (b *Bind) ListenAndServe(c net.Conn) (e error) {
 	b.con = c
 
 	msg, e := b.readPDU()
 	if e != nil {
+		c.Close()
 		return
 	}
 	switch msg.id {
@@ -55,7 +68,8 @@ func Accept(c net.Conn) (b Bind, e error) {
 			id:   GenericNack,
 			stat: StatInvCmdID,
 			seq:  msg.seq})
-		e = errors.New("invalid request")
+		e = errors.New("invalid request for binding")
+		c.Close()
 		return
 	}
 	id := msg.id | GenericNack
@@ -80,33 +94,32 @@ func Accept(c net.Conn) (b Bind, e error) {
 			id:   GenericNack,
 			stat: StatBindFail,
 			seq:  msg.seq})
+		c.Close()
 		return
 	}
 
-	// make response
-	w := bytes.Buffer{}
+	w := new(bytes.Buffer)
 	// system_id
-	writeCString([]byte(ID), &w)
+	writeCString([]byte(ID), w)
 	// interface_version
-	writeTLV(0x0210, []byte{0x34}, &w)
+	writeTLV(0x0210, []byte{0x34}, w)
 
 	if e = b.writePDU(message{
 		id:   id,
 		seq:  msg.seq,
 		body: w.Bytes()}); e != nil {
+		c.Close()
 		return
 	}
 
-	b.eventQ = make(chan message, 1024)
-	b.requestQ = make(chan message, 1024)
-	b.reqStack = make(map[uint32]chan message)
+	if BoundNotify != nil {
+		BoundNotify(b.BindInfo)
+	}
 
-	go b.serve()
-	return
+	return b.serve()
 }
 
-func Connect(c net.Conn, info BindInfo) (b Bind, e error) {
-	b.BindInfo = info
+func (b *Bind) DialAndServe(c net.Conn) (e error) {
 	b.con = c
 
 	var id CommandID
@@ -118,19 +131,18 @@ func Connect(c net.Conn, info BindInfo) (b Bind, e error) {
 	case TRxBind:
 		id = BindTransceiver
 	default:
-		e = errors.New("invalid bind type")
-		return
+		return errors.New("invalid bind type")
 	}
 
 	seq := nextSequence()
 
-	w := bytes.Buffer{}
+	w := new(bytes.Buffer)
 	// system_id
-	writeCString([]byte(ID), &w)
+	writeCString([]byte(ID), w)
 	// password
-	writeCString([]byte(b.Password), &w)
+	writeCString([]byte(b.Password), w)
 	// system_type
-	writeCString([]byte(b.SystemType), &w)
+	writeCString([]byte(b.SystemType), w)
 	// interface_version
 	w.WriteByte(0x34)
 	// addr_ton
@@ -138,7 +150,7 @@ func Connect(c net.Conn, info BindInfo) (b Bind, e error) {
 	// addr_npi
 	w.WriteByte(b.NumberingPlan)
 	// address_range
-	writeCString([]byte(b.AddressRange), &w)
+	writeCString([]byte(b.AddressRange), w)
 
 	if e = b.writePDU(message{
 		id:   id,
@@ -154,15 +166,15 @@ func Connect(c net.Conn, info BindInfo) (b Bind, e error) {
 
 	switch msg.id {
 	case BindReceiverResp:
-		if info.BindType != RxBind {
+		if b.BindType != RxBind {
 			e = errors.New("invalid response")
 		}
 	case BindTransmitterResp:
-		if info.BindType != TxBind {
+		if b.BindType != TxBind {
 			e = errors.New("invalid response")
 		}
 	case BindTransceiverResp:
-		if info.BindType != TRxBind {
+		if b.BindType != TRxBind {
 			e = errors.New("invalid response")
 		}
 	default:
@@ -182,11 +194,10 @@ func Connect(c net.Conn, info BindInfo) (b Bind, e error) {
 		return
 	}
 
-	// verify request
+	// verify response
 	buf := bytes.NewBuffer(msg.body)
 	var peerVersion byte
-	b.PeerID, e = readCString(buf)
-	if e != nil {
+	if b.PeerID, e = readCString(buf); e != nil {
 		return
 	}
 	for {
@@ -210,12 +221,11 @@ func Connect(c net.Conn, info BindInfo) (b Bind, e error) {
 		return
 	}
 
-	b.eventQ = make(chan message, 1024)
-	b.requestQ = make(chan message, 1024)
-	b.reqStack = make(map[uint32]chan message)
+	if BoundNotify != nil {
+		BoundNotify(b.BindInfo)
+	}
 
-	go b.serve()
-	return
+	return b.serve()
 }
 
 func (b *Bind) Close() {

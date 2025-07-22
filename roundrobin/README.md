@@ -15,7 +15,7 @@ HTTP REST request/answer must have specific format JSON document.
 Commandline options.
 
 ```
-roundrobin [OPTION]... [IP]:PORT
+roundrobin [OPTION]... [[IP]:PORT]
 ```
 
 Commandline example
@@ -58,7 +58,7 @@ Default value is `svr`.
 Password for ESME authentication.
 
 - `-y`  
-Type of ESME system. Value is any string. Default value is `DEBUGGER`.
+Type of ESME system. Value is any string. Default value is `ROUNDROBIN`.
 
 - `-o`  
 Type of Number for ESME address. Digits value.

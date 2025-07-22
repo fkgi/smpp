@@ -1,5 +1,18 @@
 package smpp
 
-var ConnectionDownNotify func(b *Bind) = nil
-var RxMessageNotify func(id CommandID, stat StatusCode, seq uint32, body []byte) = nil
-var TxMessageNotify func(id CommandID, stat StatusCode, seq uint32, body []byte) = nil
+var BoundNotify func(BindInfo) = nil
+var TraceMessage func(Direction, CommandID, StatusCode, uint32, []byte)
+
+type Direction bool
+
+func (v Direction) String() string {
+	if v {
+		return "Tx"
+	}
+	return "Rx"
+}
+
+const (
+	Tx Direction = true
+	Rx Direction = false
+)

@@ -12,7 +12,7 @@ type DeliverSM struct {
 
 func (d *DeliverSM) String() string {
 	buf := new(strings.Builder)
-	fmt.Fprintln(buf, "DELIVER_SM")
+	fmt.Fprintln(buf, "deliver_sm")
 	d.smPDU.WriteTo(buf)
 	return buf.String()
 }
@@ -34,14 +34,13 @@ func (d *DeliverSM) MakeResponse(s StatusCode) Response {
 }
 
 type DeliverSM_resp struct {
-	Status    StatusCode `json:"status"`
-	MessageID string     `json:"id,omitempty"`
+	Status StatusCode `json:"status"`
 }
 
 func (d *DeliverSM_resp) String() string {
 	buf := new(strings.Builder)
-	fmt.Fprintln(buf, "DELIVER_SM_RESP, stat=", d.Status)
-	fmt.Fprint(buf, "| id:", d.MessageID)
+	fmt.Fprintln(buf, "deliver_sm_resp, stat=", d.Status)
+	// fmt.Fprint(buf, "| id:", d.MessageID)
 	return buf.String()
 }
 
@@ -51,13 +50,11 @@ func (*DeliverSM_resp) CommandID() CommandID {
 
 func (d *DeliverSM_resp) Marshal() []byte {
 	w := bytes.Buffer{}
-	writeCString([]byte(d.MessageID), &w)
+	writeCString([]byte{}, &w)
 	return w.Bytes()
 }
 
 func (d *DeliverSM_resp) Unmarshal(data []byte) (e error) {
-	buf := bytes.NewBuffer(data)
-	d.MessageID, e = readCString(buf)
 	return
 }
 

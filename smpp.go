@@ -5,8 +5,8 @@ import (
 )
 
 var (
-	ID        = ""
-	WhiteList []BindInfo
+	ID = ""
+	// WhiteList []BindInfo
 	KeepAlive = time.Second * 30
 	Expire    = time.Second
 

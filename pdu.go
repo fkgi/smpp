@@ -59,8 +59,8 @@ func (b *Bind) readPDU() (msg message, e error) {
 		}
 	}
 
-	if RxMessageNotify != nil {
-		RxMessageNotify(msg.id, msg.stat, msg.seq, msg.body)
+	if TraceMessage != nil {
+		TraceMessage(Rx, msg.id, msg.stat, msg.seq, msg.body)
 	}
 	return
 }
@@ -83,8 +83,8 @@ func (b *Bind) writePDU(msg message) (e error) {
 	buf.Write(msg.body)
 	e = buf.Flush()
 
-	if e == nil && TxMessageNotify != nil {
-		TxMessageNotify(msg.id, msg.stat, msg.seq, msg.body)
+	if e == nil && TraceMessage != nil {
+		TraceMessage(Tx, msg.id, msg.stat, msg.seq, msg.body)
 	}
 	return
 }
