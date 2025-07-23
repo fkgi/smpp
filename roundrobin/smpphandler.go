@@ -10,7 +10,8 @@ import (
 	"github.com/fkgi/smpp"
 )
 
-func handleSMPP(info smpp.BindInfo, req smpp.Request) (res smpp.Response) {
+func handleSMPP(info smpp.BindInfo, req smpp.Request) smpp.Response {
+	var res smpp.Response
 	var path string
 	switch req.(type) {
 	case *smpp.DataSM:
@@ -24,27 +25,29 @@ func handleSMPP(info smpp.BindInfo, req smpp.Request) (res smpp.Response) {
 		res = &smpp.SubmitSM_resp{Status: smpp.StatSysErr}
 	default:
 		log.Println("[ERROR]", "unknown SMPP request")
-		return
+		return nil
 	}
 
 	jsondata, e := json.Marshal(req)
 	if e != nil {
 		log.Println("[ERROR]", "failed to marshal request to JSON:", e)
-		return
+		return nil
 	}
 
 	r, e := http.Post(backend+path, "application/json", bytes.NewBuffer(jsondata))
 	if e != nil {
 		log.Println("[ERROR]", "failed to send HTTP request:", e)
-		return
+		return nil
 	}
 
 	jsondata, e = io.ReadAll(r.Body)
 	defer r.Body.Close()
 	if e != nil {
 		log.Println("[ERROR]", "failed to read HTTP response:", e)
+		return nil
 	} else if e = json.Unmarshal(jsondata, res); e != nil {
 		log.Println("[ERROR]", "failed to unmarshal JSON HTTP response:", e)
+		return nil
 	}
-	return
+	return res
 }

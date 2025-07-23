@@ -29,18 +29,18 @@ func init() {
 
 		if req != nil {
 			if e := req.Unmarshal(body); e != nil {
-				log.Printf("[INFO] %s SMPP message(sequence=%d) %s\n| %s", di, seq, id, e)
+				log.Printf("[INFO] %s message(seq=%d) %s\n| %s", di, seq, id, e)
 			} else {
-				log.Printf("[INFO] %s SMPP message(sequence=%d) %s", di, seq, req)
+				log.Printf("[INFO] %s message(seq=%d) %s", di, seq, req)
 			}
 		} else if res != nil {
 			if e := res.Unmarshal(body); e != nil {
-				log.Printf("[INFO] %s SMPP message(sequence=%d) %s\n| %s", di, seq, id, e)
+				log.Printf("[INFO] %s message(seq=%d) %s\n| %s", di, seq, id, e)
 			} else {
-				log.Printf("[INFO] %s SMPP message(sequence=%d) %s", di, seq, res)
+				log.Printf("[INFO] %s message(seq=%d) %s", di, seq, res)
 			}
 		} else {
-			panic(fmt.Sprintf("unexpected request PDU (ID:%#x)", id))
+			log.Printf("[INFO] %s message(seq=%d) %s", di, seq, id)
 		}
 	}
 

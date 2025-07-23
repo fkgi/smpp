@@ -1,7 +1,7 @@
-@url=http://localhost:8080
+@url=http://localhost:28080
 #@url=http://192.168.56.109:8080
 
-POST {{url}}/data
+POST {{url}}/smppmsg/v1/data
 content-type: application/json
 
 {
@@ -21,7 +21,7 @@ content-type: application/json
 }
 
 ###
-POST {{url}}/deliver
+POST {{url}}/smppmsg/v1/deliver
 content-type: application/json
 
 {
@@ -44,3 +44,5 @@ content-type: application/json
     "short_message": "",
     "options": {}
 }
+
+###
