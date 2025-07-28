@@ -25,7 +25,6 @@ type DataSM struct {
 
 func (d *DataSM) String() string {
 	buf := new(strings.Builder)
-	fmt.Fprintln(buf, "data_sm")
 	fmt.Fprintln(buf, "| service_type:       ", d.SvcType)
 	fmt.Fprintln(buf, "| source_addr_ton:    ", d.SrcTON)
 	fmt.Fprintln(buf, "| source_addr_npi:    ", d.SrcNPI)
@@ -97,20 +96,18 @@ func (d *DataSM) Unmarshal(data []byte) (e error) {
 	return
 }
 
-func (*DataSM) MakeResponse(s StatusCode) Response {
-	return &DataSM_resp{Status: s}
+func (*DataSM) MakeResponse() Response {
+	return &DataSM_resp{}
 }
 
 type DataSM_resp struct {
-	Status    StatusCode `json:"status"`
-	MessageID string     `json:"id"`
+	MessageID string `json:"id"`
 
 	Param map[uint16][]byte `json:"options,omitempty"`
 }
 
 func (d *DataSM_resp) String() string {
 	buf := new(strings.Builder)
-	fmt.Fprintln(buf, "data_sm_resp: stat=", d.Status)
 	fmt.Fprintln(buf, "| id:", d.MessageID)
 	fmt.Fprint(buf, "| optional_parameters:")
 	for t, v := range d.Param {
@@ -153,8 +150,4 @@ func (d *DataSM_resp) Unmarshal(data []byte) (e error) {
 		}
 	}
 	return
-}
-
-func (d *DataSM_resp) CommandStatus() StatusCode {
-	return d.Status
 }

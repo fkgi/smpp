@@ -112,7 +112,7 @@ func (b *Bind) serve() error {
 	return nil
 }
 
-var RequestHandler = func(info BindInfo, pdu Request) Response {
+var RequestHandler = func(info BindInfo, pdu Request) (StatusCode, Response) {
 	/*
 		const l = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
@@ -133,5 +133,5 @@ var RequestHandler = func(info BindInfo, pdu Request) Response {
 			return &DeliverSM_resp{}
 		}
 	*/
-	return nil
+	return StatSysErr, nil
 }

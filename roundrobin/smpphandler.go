@@ -10,44 +10,57 @@ import (
 	"github.com/fkgi/smpp"
 )
 
-func handleSMPP(info smpp.BindInfo, req smpp.Request) smpp.Response {
+func handleSMPP(info smpp.BindInfo, req smpp.Request) (smpp.StatusCode, smpp.Response) {
 	var res smpp.Response
 	var path string
 	switch req.(type) {
 	case *smpp.DataSM:
 		path = "/smppmsg/v1/data"
-		res = &smpp.DataSM_resp{Status: smpp.StatSysErr}
+		res = &smpp.DataSM_resp{}
 	case *smpp.DeliverSM:
 		path = "/smppmsg/v1/deliver"
-		res = &smpp.DeliverSM_resp{Status: smpp.StatSysErr}
+		res = &smpp.DeliverSM_resp{}
 	case *smpp.SubmitSM:
 		path = "/smppmsg/v1/submit"
-		res = &smpp.SubmitSM_resp{Status: smpp.StatSysErr}
+		res = &smpp.SubmitSM_resp{}
 	default:
 		log.Println("[ERROR]", "unknown SMPP request")
-		return nil
+		return smpp.StatSysErr, nil
 	}
 
 	jsondata, e := json.Marshal(req)
 	if e != nil {
 		log.Println("[ERROR]", "failed to marshal request to JSON:", e)
-		return nil
+		return smpp.StatSysErr, nil
 	}
 
 	r, e := http.Post(backend+path, "application/json", bytes.NewBuffer(jsondata))
 	if e != nil {
 		log.Println("[ERROR]", "failed to send HTTP request:", e)
-		return nil
+		return smpp.StatSysErr, nil
 	}
 
 	jsondata, e = io.ReadAll(r.Body)
 	defer r.Body.Close()
 	if e != nil {
 		log.Println("[ERROR]", "failed to read HTTP response:", e)
-		return nil
-	} else if e = json.Unmarshal(jsondata, res); e != nil {
-		log.Println("[ERROR]", "failed to unmarshal JSON HTTP response:", e)
-		return nil
+		return smpp.StatSysErr, nil
 	}
-	return res
+	tmp := map[string]any{}
+	if e = json.Unmarshal(jsondata, &tmp); e != nil {
+		log.Println("[ERROR]", "failed to unmarshal JSON HTTP response:", e)
+		return smpp.StatSysErr, nil
+	}
+	code, ok := tmp["command_status"].(smpp.StatusCode)
+	if !ok {
+		log.Println("[ERROR]", "invalid response code:", code)
+		return smpp.StatSysErr, nil
+	}
+
+	if e = json.Unmarshal(jsondata, res); e != nil {
+		log.Println("[ERROR]", "failed to unmarshal JSON HTTP response:", e)
+		return smpp.StatSysErr, nil
+	}
+
+	return code, res
 }

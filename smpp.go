@@ -62,6 +62,10 @@ const (
 	InternalFailure CommandID = 0xf0000000
 )
 
+func (c CommandID) IsRequest() bool {
+	return c&0x80000000 == 0x00000000
+}
+
 func (c CommandID) String() string {
 	switch c {
 	case GenericNack:

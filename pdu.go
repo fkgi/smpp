@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -19,12 +21,12 @@ type PDU interface {
 
 type Request interface {
 	PDU
-	MakeResponse(StatusCode) Response
+	MakeResponse() Response
 }
 
 type Response interface {
 	PDU
-	CommandStatus() StatusCode
+	// CommandStatus() StatusCode
 }
 
 func (b *Bind) readPDU() (msg message, e error) {
@@ -118,6 +120,21 @@ func writeTLV(id uint16, value []byte, buf *bytes.Buffer) {
 	buf.Write(value)
 }
 
+type OctetData []byte
+
+func (d OctetData) MarshalJSON() ([]byte, error) {
+	return json.Marshal(hex.EncodeToString(d))
+}
+
+func (d *OctetData) UnmarshalJSON(b []byte) (e error) {
+	s := ""
+	if e = json.Unmarshal(b, &s); e != nil {
+	} else if a, e := hex.DecodeString(s); e == nil {
+		*d = a
+	}
+	return
+}
+
 type smPDU struct {
 	SvcType  string `json:"svc_type,omitempty"`
 	SrcTON   byte   `json:"src_ton,omitempty"`
@@ -137,9 +154,9 @@ type smPDU struct {
 	DataCoding           byte   `json:"data_coding"`
 	SmDefaultMsgId       byte   `json:"sm_default_sm_id,omitempty"`
 	// SmLength            byte
-	ShortMessage []byte `json:"short_message,omitempty"`
+	ShortMessage OctetData `json:"short_message,omitempty"`
 
-	Param map[uint16][]byte `json:"options,omitempty"`
+	Param map[uint16]OctetData `json:"options,omitempty"`
 }
 
 func (d *smPDU) WriteTo(buf *strings.Builder) {
@@ -221,8 +238,9 @@ func (d *smPDU) Unmarshal(data []byte) (e error) {
 		d.ShortMessage = make([]byte, int(l))
 		_, e = buf.Read(d.ShortMessage)
 	}
+
 	if e == nil {
-		d.Param = make(map[uint16][]byte)
+		d.Param = make(map[uint16]OctetData)
 		for {
 			t, v, e2 := readTLV(buf)
 			if e2 == io.EOF {

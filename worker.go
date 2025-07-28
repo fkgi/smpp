@@ -60,15 +60,16 @@ func handleMsg(msg message) {
 		panic(fmt.Sprintf("unexpected request PDU (ID:%#x)", msg.id))
 	}
 
+	stat := StatSysErr
 	var res Response
 	if e := req.Unmarshal(msg.body); e != nil || RequestHandler == nil {
-		res = req.MakeResponse(StatSysErr)
-	} else if res = RequestHandler(msg.bind.BindInfo, req); res == nil {
-		res = req.MakeResponse(StatSysErr)
+		res = req.MakeResponse()
+	} else if stat, res = RequestHandler(msg.bind.BindInfo, req); res == nil {
+		res = req.MakeResponse()
 	}
 	msg.bind.eventQ <- message{
 		id:       res.CommandID(),
-		stat:     res.CommandStatus(),
+		stat:     stat,
 		seq:      msg.seq,
 		body:     res.Marshal(),
 		callback: dummyCallback}

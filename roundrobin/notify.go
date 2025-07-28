@@ -10,37 +10,44 @@ import (
 
 func init() {
 	smpp.TraceMessage = func(di smpp.Direction, id smpp.CommandID, stat smpp.StatusCode, seq uint32, body []byte) {
-		var req smpp.Request
-		var res smpp.Response
-		switch id {
-		case smpp.SubmitSm:
-			req = &smpp.SubmitSM{}
-		case smpp.SubmitSmResp:
-			res = &smpp.SubmitSM_resp{}
-		case smpp.DeliverSm:
-			req = &smpp.DeliverSM{}
-		case smpp.DeliverSmResp:
-			res = &smpp.DeliverSM_resp{}
-		case smpp.DataSm:
-			req = &smpp.DataSM{}
-		case smpp.DataSmResp:
-			res = &smpp.DataSM_resp{}
-		}
-
-		if req != nil {
-			if e := req.Unmarshal(body); e != nil {
-				log.Printf("[INFO] %s message(seq=%d) %s\n| %s", di, seq, id, e)
-			} else {
-				log.Printf("[INFO] %s message(seq=%d) %s", di, seq, req)
+		if id.IsRequest() {
+			var req smpp.Request
+			switch id {
+			case smpp.SubmitSm:
+				req = &smpp.SubmitSM{}
+			case smpp.DeliverSm:
+				req = &smpp.DeliverSM{}
+			case smpp.DataSm:
+				req = &smpp.DataSM{}
 			}
-		} else if res != nil {
-			if e := res.Unmarshal(body); e != nil {
-				log.Printf("[INFO] %s message(seq=%d) %s\n| %s", di, seq, id, e)
+			if req != nil {
+				if e := req.Unmarshal(body); e != nil {
+					log.Printf("[INFO] %s message(seq=%d) %s\n| %s", di, seq, id, e)
+				} else {
+					log.Printf("[INFO] %s message(seq=%d) %s", di, seq, req)
+				}
 			} else {
-				log.Printf("[INFO] %s message(seq=%d) %s", di, seq, res)
+				log.Printf("[INFO] %s message(seq=%d) %s", di, seq, id)
 			}
 		} else {
-			log.Printf("[INFO] %s message(seq=%d) %s", di, seq, id)
+			var res smpp.Response
+			switch id {
+			case smpp.SubmitSmResp:
+				res = &smpp.SubmitSM_resp{}
+			case smpp.DeliverSmResp:
+				res = &smpp.DeliverSM_resp{}
+			case smpp.DataSmResp:
+				res = &smpp.DataSM_resp{}
+			}
+			if res != nil {
+				if e := res.Unmarshal(body); e != nil {
+					log.Printf("[INFO] %s message(seq=%d) %s\n| %s", di, seq, id, e)
+				} else {
+					log.Printf("[INFO] %s message(seq=%d) %s", di, seq, res)
+				}
+			} else {
+				log.Printf("[INFO] %s message(seq=%d) %s, stat=%s", di, seq, id, stat)
+			}
 		}
 	}
 

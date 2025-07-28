@@ -215,6 +215,10 @@ func (b *Bind) DialAndServe(c net.Conn) (e error) {
 			peerVersion = v[0]
 		}
 	}
+	if e != nil {
+		c.Close()
+		return
+	}
 	if peerVersion != 0 && peerVersion != 0x34 {
 		e = errors.New("invalid version")
 		c.Close()
@@ -251,7 +255,7 @@ func (b *Bind) Close() {
 	b.con.Close()
 }
 
-func (b *Bind) Send(p Request) (a Response, e error) {
+func (b *Bind) Send(p Request) (s StatusCode, a Response, e error) {
 	if b.BindType == NilBind {
 		e = errors.New("closed bind")
 		return
@@ -273,13 +277,14 @@ func (b *Bind) Send(p Request) (a Response, e error) {
 	msg = <-msg.callback
 	wt.Stop()
 
+	s = msg.stat
 	switch msg.id {
 	case SubmitSmResp:
-		a = &SubmitSM_resp{Status: msg.stat}
+		a = &SubmitSM_resp{}
 	case DeliverSmResp:
-		a = &DeliverSM_resp{Status: msg.stat}
+		a = &DeliverSM_resp{}
 	case DataSmResp:
-		a = &DataSM_resp{Status: msg.stat}
+		a = &DataSM_resp{}
 	case GenericNack:
 		e = errors.New("send failed")
 	case InternalFailure:

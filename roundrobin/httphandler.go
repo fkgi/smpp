@@ -30,7 +30,7 @@ func handleHTTP(w http.ResponseWriter, r *http.Request, req smpp.Request, b smpp
 		return
 	}
 
-	res, e := b.Send(req)
+	stat, res, e := b.Send(req)
 	if e != nil {
 		log.Println("[ERROR]", "failed to send SMPP request:", e)
 		httpErr("failed to send request", e.Error(), http.StatusInternalServerError, w)
@@ -43,6 +43,11 @@ func handleHTTP(w http.ResponseWriter, r *http.Request, req smpp.Request, b smpp
 		httpErr("failed to unmarshal response", e.Error(), http.StatusInternalServerError, w)
 		return
 	}
+
+	tmp := map[string]any{}
+	json.Unmarshal(jsondata, &tmp)
+	tmp["command_status"] = stat
+	jsondata, _ = json.Marshal(tmp)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
