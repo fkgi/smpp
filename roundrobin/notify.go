@@ -19,15 +19,14 @@ func init() {
 				req = &smpp.DeliverSM{}
 			case smpp.DataSm:
 				req = &smpp.DataSM{}
+			default:
+				log.Printf("[INFO] %s %s (seq=%d)", di, di, seq)
+				return
 			}
-			if req != nil {
-				if e := req.Unmarshal(body); e != nil {
-					log.Printf("[INFO] %s message(seq=%d) %s\n| %s", di, seq, id, e)
-				} else {
-					log.Printf("[INFO] %s message(seq=%d) %s", di, seq, req)
-				}
+			if e := req.Unmarshal(body); e != nil {
+				log.Printf("[INFO] %s %s (seq=%d)\n| %s", di, id, seq, e)
 			} else {
-				log.Printf("[INFO] %s message(seq=%d) %s", di, seq, id)
+				log.Printf("[INFO] %s %s (seq=%d)\n%s", di, id, seq, req)
 			}
 		} else {
 			var res smpp.Response
@@ -38,15 +37,14 @@ func init() {
 				res = &smpp.DeliverSM_resp{}
 			case smpp.DataSmResp:
 				res = &smpp.DataSM_resp{}
+			default:
+				log.Printf("[INFO] %s %s (seq=%d, stat=%s)", di, id, seq, stat)
+				return
 			}
-			if res != nil {
-				if e := res.Unmarshal(body); e != nil {
-					log.Printf("[INFO] %s message(seq=%d) %s\n| %s", di, seq, id, e)
-				} else {
-					log.Printf("[INFO] %s message(seq=%d) %s", di, seq, res)
-				}
+			if e := res.Unmarshal(body); e != nil {
+				log.Printf("[INFO] %s %s (seq=%d, stat=%s)\n| %s", di, id, seq, stat, e)
 			} else {
-				log.Printf("[INFO] %s message(seq=%d) %s, stat=%s", di, seq, id, stat)
+				log.Printf("[INFO] %s %s (seq=%d, stat=%s)\n%s", di, id, seq, stat, res)
 			}
 		}
 	}

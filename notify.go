@@ -1,7 +1,7 @@
 package smpp
 
 var BoundNotify func(BindInfo) = nil
-var TraceMessage func(Direction, CommandID, StatusCode, uint32, []byte)
+var TraceMessage func(Direction, CommandID, StatusCode, uint32, []byte) = nil
 
 type Direction bool
 

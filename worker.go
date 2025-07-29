@@ -48,31 +48,63 @@ func init() {
 
 func handleMsg(msg message) {
 	var req Request
+	var res Response
+
 	switch msg.id {
 	case SubmitSm:
 		req = &SubmitSM{}
+		res = &SubmitSM_resp{}
 	case DeliverSm:
 		req = &DeliverSM{}
+		res = &DeliverSM_resp{}
 	case DataSm:
 		req = &DataSM{}
+		res = &DataSM_resp{}
 	}
 	if req == nil {
 		panic(fmt.Sprintf("unexpected request PDU (ID:%#x)", msg.id))
 	}
 
 	stat := StatSysErr
-	var res Response
 	if e := req.Unmarshal(msg.body); e != nil || RequestHandler == nil {
-		res = req.MakeResponse()
 	} else if stat, res = RequestHandler(msg.bind.BindInfo, req); res == nil {
-		res = req.MakeResponse()
+		msg.bind.eventQ <- message{
+			id:       GenericNack,
+			stat:     stat,
+			seq:      msg.seq,
+			callback: dummyCallback}
+	} else {
+		msg.bind.eventQ <- message{
+			id:       res.CommandID(),
+			stat:     stat,
+			seq:      msg.seq,
+			body:     res.Marshal(),
+			callback: dummyCallback}
 	}
-	msg.bind.eventQ <- message{
-		id:       res.CommandID(),
-		stat:     stat,
-		seq:      msg.seq,
-		body:     res.Marshal(),
-		callback: dummyCallback}
 }
 
 var dummyCallback = make(chan message)
+
+var RequestHandler = func(info BindInfo, pdu Request) (StatusCode, Response) {
+	/*
+		const l = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+		id := make([]byte, 16)
+		for i := range id {
+			id[i] = l[rand.Intn(len(l))]
+		}
+		switch pdu.(type) {
+		case *DataSM:
+			return &DataSM_resp{
+				MessageID: string(id),
+			}
+		case *SubmitSM:
+			return &SubmitSM_resp{
+				MessageID: string(id),
+			}
+		case *DeliverSM:
+			return &DeliverSM_resp{}
+		}
+	*/
+	return StatSysErr, nil
+}

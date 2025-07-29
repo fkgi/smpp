@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-type PDU interface {
+type pdu interface {
 	CommandID() CommandID
 	Marshal() []byte
 	Unmarshal([]byte) error
@@ -20,12 +20,12 @@ type PDU interface {
 }
 
 type Request interface {
-	PDU
+	pdu
 	MakeResponse() Response
 }
 
 type Response interface {
-	PDU
+	pdu
 	// CommandStatus() StatusCode
 }
 
@@ -159,7 +159,8 @@ type smPDU struct {
 	Param map[uint16]OctetData `json:"options,omitempty"`
 }
 
-func (d *smPDU) WriteTo(buf *strings.Builder) {
+func (d *smPDU) String() string {
+	buf := new(strings.Builder)
 	fmt.Fprintln(buf, "| service_type:           ", d.SvcType)
 	fmt.Fprintln(buf, "| source_addr_ton:        ", d.SrcTON)
 	fmt.Fprintln(buf, "| source_addr_npi:        ", d.SrcNPI)
@@ -182,6 +183,7 @@ func (d *smPDU) WriteTo(buf *strings.Builder) {
 	for t, v := range d.Param {
 		fmt.Fprintf(buf, "\n| | %#04x: 0x% x", t, v)
 	}
+	return buf.String()
 }
 
 func (d *smPDU) Marshal() []byte {

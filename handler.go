@@ -67,7 +67,7 @@ func (b *Bind) serve() error {
 						id:  UnbindResp,
 						seq: msg.seq})
 					b.con.Close()
-				} else if msg.id < 0x80000000 {
+				} else if msg.id.IsRequest() {
 					// Rx other req
 					e = b.writePDU(message{
 						id:   GenericNack,
@@ -110,28 +110,4 @@ func (b *Bind) serve() error {
 	b.eventQ <- message{id: CloseConnection}
 
 	return nil
-}
-
-var RequestHandler = func(info BindInfo, pdu Request) (StatusCode, Response) {
-	/*
-		const l = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-
-		id := make([]byte, 16)
-		for i := range id {
-			id[i] = l[rand.Intn(len(l))]
-		}
-		switch pdu.(type) {
-		case *DataSM:
-			return &DataSM_resp{
-				MessageID: string(id),
-			}
-		case *SubmitSM:
-			return &SubmitSM_resp{
-				MessageID: string(id),
-			}
-		case *DeliverSM:
-			return &DeliverSM_resp{}
-		}
-	*/
-	return StatSysErr, nil
 }
