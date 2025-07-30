@@ -9,43 +9,19 @@ import (
 )
 
 func init() {
-	smpp.TraceMessage = func(di smpp.Direction, id smpp.CommandID, stat smpp.StatusCode, seq uint32, body []byte) {
-		if id.IsRequest() {
-			var req smpp.Request
-			switch id {
-			case smpp.SubmitSm:
-				req = &smpp.SubmitSM{}
-			case smpp.DeliverSm:
-				req = &smpp.DeliverSM{}
-			case smpp.DataSm:
-				req = &smpp.DataSM{}
-			default:
-				log.Printf("[INFO] %s %s (seq=%d)", di, di, seq)
-				return
-			}
-			if e := req.Unmarshal(body); e != nil {
-				log.Printf("[INFO] %s %s (seq=%d)\n| %s", di, id, seq, e)
-			} else {
-				log.Printf("[INFO] %s %s (seq=%d)\n%s", di, id, seq, req)
-			}
+	smpp.TraceMessage = func(di smpp.Direction, id smpp.CommandID, st smpp.StatusCode, seq uint32, body []byte) {
+		stat := ""
+		if !id.IsRequest() {
+			stat = fmt.Sprintf(", stat=%s", st)
+		}
+		if pdu := smpp.MakePDUof(id); pdu == nil {
+			log.Printf("[INFO] %s %s (seq=%d%s)", di, di, seq, stat)
+		} else if e := pdu.Unmarshal(body); e != nil {
+			log.Printf("[INFO] %s %s (seq=%d%s)\n| error: %s", di, id, seq, stat, e)
+		} else if s := pdu.String(); len(s) == 0 {
+			log.Printf("[INFO] %s %s (seq=%d%s)", di, id, seq, stat)
 		} else {
-			var res smpp.Response
-			switch id {
-			case smpp.SubmitSmResp:
-				res = &smpp.SubmitSM_resp{}
-			case smpp.DeliverSmResp:
-				res = &smpp.DeliverSM_resp{}
-			case smpp.DataSmResp:
-				res = &smpp.DataSM_resp{}
-			default:
-				log.Printf("[INFO] %s %s (seq=%d, stat=%s)", di, id, seq, stat)
-				return
-			}
-			if e := res.Unmarshal(body); e != nil {
-				log.Printf("[INFO] %s %s (seq=%d, stat=%s)\n| %s", di, id, seq, stat, e)
-			} else {
-				log.Printf("[INFO] %s %s (seq=%d, stat=%s)\n%s", di, id, seq, stat, res)
-			}
+			log.Printf("[INFO] %s %s (seq=%d%s)\n%s", di, id, seq, stat, s)
 		}
 	}
 

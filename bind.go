@@ -1,9 +1,7 @@
 package smpp
 
 import (
-	"bytes"
 	"errors"
-	"io"
 	"net"
 	"time"
 )
@@ -56,6 +54,7 @@ func (b *Bind) ListenAndServe(c net.Conn) (e error) {
 		c.Close()
 		return
 	}
+
 	switch msg.id {
 	case BindReceiver:
 		b.BindType = TxBind
@@ -68,46 +67,42 @@ func (b *Bind) ListenAndServe(c net.Conn) (e error) {
 			id:   GenericNack,
 			stat: StatInvCmdID,
 			seq:  msg.seq})
-		e = errors.New("invalid request for binding")
 		c.Close()
+		e = errors.New("invalid request for binding")
 		return
 	}
-	id := msg.id | GenericNack
 
-	// verify request
-	buf := bytes.NewBuffer(msg.body)
-	var tmp byte
-	if b.PeerID, e = readCString(buf); e != nil {
-	} else if b.Password, e = readCString(buf); e != nil {
-	} else if b.SystemType, e = readCString(buf); e != nil {
-	} else if tmp, e = buf.ReadByte(); e != nil {
-	} else if tmp != 0x34 {
+	req := bindReq{cmd: msg.id}
+	res := bindRes{cmd: msg.id | GenericNack}
+
+	e = req.Unmarshal(msg.body)
+	if e == nil && req.Version != 0x34 {
 		e = errors.New("invalid version")
-	} else if b.TypeOfNumber, e = buf.ReadByte(); e != nil {
-	} else if b.NumberingPlan, e = buf.ReadByte(); e != nil {
-	} else {
-		b.AddressRange, e = readCString(buf)
 	}
-
 	if e != nil {
 		b.writePDU(message{
-			id:   GenericNack,
+			id:   res.CommandID(),
 			stat: StatBindFail,
 			seq:  msg.seq})
 		c.Close()
 		return
 	}
 
-	w := new(bytes.Buffer)
-	// system_id
-	writeCString([]byte(ID), w)
-	// interface_version
-	writeTLV(0x0210, []byte{0x34}, w)
+	b.PeerID = req.SystemID
+	b.Password = req.Password
+	b.SystemType = req.SystemType
+	b.TypeOfNumber = req.AddrTON
+	b.NumberingPlan = req.AddrNPI
+	b.AddressRange = req.AddrRange
+
+	res.SystemID = ID
+	res.Version = 0x34
 
 	if e = b.writePDU(message{
-		id:   id,
+		id:   res.CommandID(),
+		stat: StatOK,
 		seq:  msg.seq,
-		body: w.Bytes()}); e != nil {
+		body: res.Marshal()}); e != nil {
 		c.Close()
 		return
 	}
@@ -122,40 +117,36 @@ func (b *Bind) ListenAndServe(c net.Conn) (e error) {
 func (b *Bind) DialAndServe(c net.Conn) (e error) {
 	b.con = c
 
-	var id CommandID
+	defer func() {
+		if e != nil {
+			c.Close()
+		}
+	}()
+
+	req := bindReq{
+		SystemID:   ID,
+		Password:   b.Password,
+		SystemType: b.SystemType,
+		Version:    0x34,
+		AddrTON:    b.TypeOfNumber,
+		AddrNPI:    b.NumberingPlan,
+		AddrRange:  b.AddressRange}
 	switch b.BindType {
 	case RxBind:
-		id = BindReceiver
+		req.cmd = BindReceiver
 	case TxBind:
-		id = BindTransmitter
+		req.cmd = BindTransmitter
 	case TRxBind:
-		id = BindTransceiver
+		req.cmd = BindTransceiver
 	default:
 		return errors.New("invalid bind type")
 	}
-
 	seq := nextSequence()
 
-	w := new(bytes.Buffer)
-	// system_id
-	writeCString([]byte(ID), w)
-	// password
-	writeCString([]byte(b.Password), w)
-	// system_type
-	writeCString([]byte(b.SystemType), w)
-	// interface_version
-	w.WriteByte(0x34)
-	// addr_ton
-	w.WriteByte(b.TypeOfNumber)
-	// addr_npi
-	w.WriteByte(b.NumberingPlan)
-	// address_range
-	writeCString([]byte(b.AddressRange), w)
-
 	if e = b.writePDU(message{
-		id:   id,
+		id:   req.CommandID(),
 		seq:  seq,
-		body: w.Bytes()}); e != nil {
+		body: req.Marshal()}); e != nil {
 		return
 	}
 
@@ -164,66 +155,28 @@ func (b *Bind) DialAndServe(c net.Conn) (e error) {
 		return
 	}
 
-	switch msg.id {
-	case BindReceiverResp:
-		if b.BindType != RxBind {
-			e = errors.New("invalid response")
-		}
-	case BindTransmitterResp:
-		if b.BindType != TxBind {
-			e = errors.New("invalid response")
-		}
-	case BindTransceiverResp:
-		if b.BindType != TRxBind {
-			e = errors.New("invalid response")
-		}
-	default:
+	if msg.id != req.cmd|GenericNack {
 		e = errors.New("invalid response")
-	}
-	if e != nil {
 		return
 	}
-
 	if msg.stat != 0 {
 		e = errors.New("error response")
 		return
 	}
-
 	if seq != msg.seq {
 		e = errors.New("invalid sequence")
 		return
 	}
 
-	// verify response
-	buf := bytes.NewBuffer(msg.body)
-	var peerVersion byte
-	if b.PeerID, e = readCString(buf); e != nil {
-		return
-	}
-	for {
-		t, v, e2 := readTLV(buf)
-		if e2 == io.EOF {
-			break
-		}
-		if e2 != nil {
-			e = e2
-			break
-		}
-
-		switch t {
-		case 0x0210:
-			peerVersion = v[0]
-		}
+	res := bindRes{cmd: msg.id}
+	e = res.Unmarshal(msg.body)
+	if e == nil && res.Version != 0x34 {
+		e = errors.New("invalid version")
 	}
 	if e != nil {
-		c.Close()
 		return
 	}
-	if peerVersion != 0 && peerVersion != 0x34 {
-		e = errors.New("invalid version")
-		c.Close()
-		return
-	}
+	b.PeerID = res.SystemID
 
 	if BoundNotify != nil {
 		BoundNotify(b.BindInfo)
@@ -255,16 +208,16 @@ func (b *Bind) Close() {
 	b.con.Close()
 }
 
-func (b *Bind) Send(p Request) (s StatusCode, a Response, e error) {
+func (b *Bind) Send(r PDU) (s StatusCode, a PDU, e error) {
 	if b.BindType == NilBind {
 		e = errors.New("closed bind")
 		return
 	}
 
 	msg := message{
-		id:       p.CommandID(),
+		id:       r.CommandID(),
 		seq:      nextSequence(),
-		body:     p.Marshal(),
+		body:     r.Marshal(),
 		callback: make(chan message)}
 	b.eventQ <- msg
 
@@ -279,22 +232,13 @@ func (b *Bind) Send(p Request) (s StatusCode, a Response, e error) {
 
 	s = msg.stat
 	switch msg.id {
-	case SubmitSmResp:
-		a = &SubmitSM_resp{}
-	case DeliverSmResp:
-		a = &DeliverSM_resp{}
-	case DataSmResp:
-		a = &DataSM_resp{}
-	case GenericNack:
-		e = errors.New("send failed")
+	case SubmitSmResp, DeliverSmResp, DataSmResp, GenericNack:
+		a = MakePDUof(msg.id)
+		e = a.Unmarshal(msg.body)
 	case InternalFailure:
 		e = errors.New("request timeout")
 	default:
 		e = errors.New("unexpected response")
 	}
-	if e == nil {
-		e = a.Unmarshal(msg.body)
-	}
-
 	return
 }

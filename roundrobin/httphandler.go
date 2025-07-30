@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -9,7 +10,7 @@ import (
 	"github.com/fkgi/smpp"
 )
 
-func handleHTTP(w http.ResponseWriter, r *http.Request, req smpp.Request, b smpp.Bind) {
+func handleHTTP(w http.ResponseWriter, r *http.Request, req smpp.PDU, b smpp.Bind) {
 	if r.Method != http.MethodPost {
 		log.Println("[INFO]", "invalid HTTP request method:", r.Method)
 		w.Header().Add("Allow", "POST")
@@ -37,17 +38,34 @@ func handleHTTP(w http.ResponseWriter, r *http.Request, req smpp.Request, b smpp
 		return
 	}
 
-	jsondata, e = json.Marshal(res)
+	switch res := res.(type) {
+	case *smpp.DataSM_resp:
+		jsondata, e = json.Marshal(&DataSM_resp{
+			Status:      stat,
+			DataSM_resp: *res})
+	case *smpp.DeliverSM_resp:
+		jsondata, e = json.Marshal(&DeliverSM_resp{
+			Status:         stat,
+			DeliverSM_resp: *res})
+	case *smpp.SubmitSM_resp:
+		jsondata, e = json.Marshal(&SubmitSM_resp{
+			Status:        stat,
+			SubmitSM_resp: *res})
+	default:
+		switch res.CommandID() {
+		case smpp.GenericNack:
+			jsondata, e = json.Marshal(&GenericNack{
+				Status: stat})
+		default:
+			e = errors.New("unknown SMPP request")
+		}
+	}
+
 	if e != nil {
 		log.Println("[ERROR]", "failed to marshal response to JSON:", e)
 		httpErr("failed to unmarshal response", e.Error(), http.StatusInternalServerError, w)
 		return
 	}
-
-	tmp := map[string]any{}
-	json.Unmarshal(jsondata, &tmp)
-	tmp["command_status"] = stat
-	jsondata, _ = json.Marshal(tmp)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)

@@ -1,6 +1,8 @@
 package smpp
 
 import (
+	"encoding/json"
+	"errors"
 	"time"
 )
 
@@ -279,4 +281,116 @@ func (c StatusCode) String() string {
 		return "ESME_RUNKNOWNERR"
 	}
 	return "Reserved"
+}
+
+func (c StatusCode) MarshalJSON() ([]byte, error) {
+	return json.Marshal(c.String())
+}
+
+func (c *StatusCode) UnmarshalJSON(b []byte) (e error) {
+	s := ""
+	if e = json.Unmarshal(b, &s); e != nil {
+		return
+	}
+	switch s {
+	case "ESME_ROK":
+		*c = StatOK
+	case "ESME_RINVMSGLEN":
+		*c = StatInvMsgLen
+	case "ESME_RINVCMDLEN":
+		*c = StatInvCmdLen
+	case "ESME_RINVCMDID":
+		*c = StatInvCmdID
+	case "ESME_RINVBNDSTS":
+		*c = StatInvBndSts
+	case "ESME_RALYBND":
+		*c = StatAlyBnd
+	case "ESME_RINVPRTFLG":
+		*c = StatInvPrtFlg
+	case "ESME_RINVREGDLVFLG":
+		*c = StatInvRegDlvFlg
+	case "ESME_RSYSERR":
+		*c = StatSysErr
+	case "ESME_RINVSRCADR":
+		*c = StatInvSrcAdr
+	case "ESME_RINVDSTADR":
+		*c = StatInvDstAdr
+	case "ESME_RINVMSGID":
+		*c = StatInvMsgID
+	case "ESME_RBINDFAIL":
+		*c = StatBindFail
+	case "ESME_RINVPASWD":
+		*c = StatInvPaswd
+	case "ESME_RINVSYSID":
+		*c = StatInvSysID
+	case "ESME_RCANCELFAIL":
+		*c = StatCancelFail
+	case "ESME_RREPLACEFAIL":
+		*c = StatReplaceFail
+	case "ESME_RMSGQFUL":
+		*c = StatMsgQFul
+	case "ESME_RINVSERTYP":
+		*c = StatInvSerTyp
+	case "ESME_RINVNUMDESTS":
+		*c = StatInvNumDests
+	case "ESME_RINVDLNAME":
+		*c = StatInvDLName
+	case "ESME_RINVDESTFLAG":
+		*c = StatInvDestFlag
+	case "ESME_RINVSUBREP":
+		*c = StatInvSubRep
+	case "ESME_RINVESMCLASS":
+		*c = StatInvEsmClass
+	case "ESME_RCNTSUBDL":
+		*c = StatCntSubDL
+	case "ESME_RSUBMITFAIL":
+		*c = StatSubmitFail
+	case "ESME_RINVSRCTON":
+		*c = StatInvSrcTON
+	case "ESME_RINVSRCNPI":
+		*c = StatInvSrcNPI
+	case "ESME_RINVDSTTON":
+		*c = StatInvDstTON
+	case "ESME_RINVDSTNPI":
+		*c = StatInvDstNPI
+	case "ESME_RINVSYSTYP":
+		*c = StatInvSysTyp
+	case "ESME_RINVREPFLAG":
+		*c = StatInvRepFlag
+	case "ESME_RINVNUMMSGS":
+		*c = StatInvNumMsgs
+	case "ESME_RTHROTTLED":
+		*c = StatThrottled
+	case "ESME_RINVSCHED":
+		*c = StatInvSched
+	case "ESME_RINVEXPIRY":
+		*c = StatInvExpiry
+	case "ESME_RINVDFTMSGID":
+		*c = StatInvDFTMsgID
+	case "ESME_RX_T_APPN":
+		*c = StatRx_T_AppN
+	case "ESME_RX_P_APPN":
+		*c = StatRx_P_AppN
+	case "ESME_RX_R_APPN":
+		*c = StatRx_R_AppN
+	case "ESME_RQUERYFAIL":
+		*c = StatQueryFail
+	case "ESME_RINVOPTPARSTREAM":
+		*c = StatInvOptParStream
+	case "ESME_ROPTPARNOTALLWD":
+		*c = StatOptParNotAllwd
+	case "ESME_RINVPARLEN":
+		*c = StatInvParLen
+	case "ESME_RMISSINGOPTPARAM":
+		*c = StatMissingOptParam
+	case "ESME_RINVOPTPARAMVAL":
+		*c = StatInvOptParamVal
+	case "ESME_RDELIVERYFAILURE":
+		*c = StatDeliveryFailure
+	case "ESME_RUNKNOWNERR":
+		*c = StatUnknownErr
+	default:
+		e = errors.New("undefined code")
+	}
+	return
 }

@@ -20,7 +20,7 @@ type DataSM struct {
 	RegisteredDelivery byte `json:"registered_delivery"`
 	DataCoding         byte `json:"data_coding"`
 
-	Param map[uint16][]byte `json:"options,omitempty"`
+	Param map[uint16]OctetData `json:"options,omitempty"`
 }
 
 func (d *DataSM) String() string {
@@ -42,13 +42,10 @@ func (d *DataSM) String() string {
 	return buf.String()
 }
 
-func (*DataSM) CommandID() CommandID {
-	return DataSm
-}
+func (*DataSM) CommandID() CommandID { return DataSm }
 
 func (d *DataSM) Marshal() []byte {
 	w := bytes.Buffer{}
-
 	writeCString([]byte(d.SvcType), &w)
 	w.WriteByte(d.SrcTON)
 	w.WriteByte(d.SrcNPI)
@@ -59,11 +56,9 @@ func (d *DataSM) Marshal() []byte {
 	w.WriteByte(d.EsmClass)
 	w.WriteByte(d.RegisteredDelivery)
 	w.WriteByte(d.DataCoding)
-
 	for k, v := range d.Param {
 		writeTLV(k, v, &w)
 	}
-
 	return w.Bytes()
 }
 
@@ -80,7 +75,7 @@ func (d *DataSM) Unmarshal(data []byte) (e error) {
 	} else if d.RegisteredDelivery, e = buf.ReadByte(); e != nil {
 	} else if d.DataCoding, e = buf.ReadByte(); e != nil {
 	} else {
-		d.Param = make(map[uint16][]byte)
+		d.Param = make(map[uint16]OctetData)
 		for {
 			t, v, e2 := readTLV(buf)
 			if e2 == io.EOF {
@@ -96,14 +91,9 @@ func (d *DataSM) Unmarshal(data []byte) (e error) {
 	return
 }
 
-func (*DataSM) MakeResponse() Response {
-	return &DataSM_resp{}
-}
-
 type DataSM_resp struct {
-	MessageID string `json:"id"`
-
-	Param map[uint16][]byte `json:"options,omitempty"`
+	MessageID string            `json:"id"`
+	Param     map[uint16][]byte `json:"options,omitempty"`
 }
 
 func (d *DataSM_resp) String() string {
@@ -116,19 +106,14 @@ func (d *DataSM_resp) String() string {
 	return buf.String()
 }
 
-func (*DataSM_resp) CommandID() CommandID {
-	return DataSmResp
-}
+func (*DataSM_resp) CommandID() CommandID { return DataSmResp }
 
 func (d *DataSM_resp) Marshal() []byte {
 	w := bytes.Buffer{}
-
 	writeCString([]byte(d.MessageID), &w)
-
 	for k, v := range d.Param {
 		writeTLV(k, v, &w)
 	}
-
 	return w.Bytes()
 }
 

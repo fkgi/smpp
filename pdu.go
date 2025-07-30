@@ -8,25 +8,55 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"strings"
 )
 
-type pdu interface {
+type PDU interface {
 	CommandID() CommandID
 	Marshal() []byte
 	Unmarshal([]byte) error
 	fmt.Stringer
 }
 
-type Request interface {
-	pdu
-	MakeResponse() Response
-}
-
-type Response interface {
-	pdu
-	// CommandStatus() StatusCode
+func MakePDUof(c CommandID) PDU {
+	switch c {
+	case GenericNack:
+		return &genericNack{}
+	case BindReceiver, BindTransmitter, BindTransceiver:
+		return &bindReq{cmd: c}
+	case BindReceiverResp, BindTransmitterResp, BindTransceiverResp:
+		return &bindRes{cmd: c}
+	// case QuerySm:
+	// case QuerySmResp:
+	case SubmitSm:
+		return &SubmitSM{}
+	case SubmitSmResp:
+		return &SubmitSM_resp{}
+	case DeliverSm:
+		return &DeliverSM{}
+	case DeliverSmResp:
+		return &DeliverSM_resp{}
+	case Unbind:
+		return &unbindReq{}
+	case UnbindResp:
+		return &unbindRes{}
+	//case ReplaceSm:
+	//case ReplaceSmResp:
+	//case CancelSm:
+	//case CancelSmResp:
+	//case Outbind:
+	case EnquireLink:
+		return &enquireReq{}
+	case EnquireLinkResp:
+		return &enquireRes{}
+	// case SubmitMulti:
+	// case SubmitMultiResp:
+	// case AlertNotification:
+	case DataSm:
+		return &DataSM{}
+	case DataSmResp:
+		return &DataSM_resp{}
+	}
+	return nil
 }
 
 func (b *Bind) readPDU() (msg message, e error) {
@@ -128,132 +158,17 @@ func (d OctetData) MarshalJSON() ([]byte, error) {
 
 func (d *OctetData) UnmarshalJSON(b []byte) (e error) {
 	s := ""
+	var a []byte
 	if e = json.Unmarshal(b, &s); e != nil {
-	} else if a, e := hex.DecodeString(s); e == nil {
+	} else if a, e = hex.DecodeString(s); e == nil {
 		*d = a
 	}
 	return
 }
 
-type smPDU struct {
-	SvcType  string `json:"svc_type,omitempty"`
-	SrcTON   byte   `json:"src_ton,omitempty"`
-	SrcNPI   byte   `json:"src_npi,omitempty"`
-	SrcAddr  string `json:"src_addr,omitempty"`
-	DstTON   byte   `json:"dst_ton"`
-	DstNPI   byte   `json:"dst_npi"`
-	DstAddr  string `json:"dst_addr"`
-	EsmClass byte   `json:"esm_class"`
+type genericNack struct{}
 
-	ProtocolId           byte   `json:"protocol_id"`
-	PriorityFlag         byte   `json:"priority_flag"`
-	ScheduleDeliveryTime string `json:"schedule_delivery_time,omitempty"`
-	ValidityPeriod       string `json:"validity_period,omitempty"`
-	RegisteredDelivery   byte   `json:"registered_delivery"`
-	ReplaceIfPresentFlag byte   `json:"replace_if_present_flag,omitempty"`
-	DataCoding           byte   `json:"data_coding"`
-	SmDefaultMsgId       byte   `json:"sm_default_sm_id,omitempty"`
-	// SmLength            byte
-	ShortMessage OctetData `json:"short_message,omitempty"`
-
-	Param map[uint16]OctetData `json:"options,omitempty"`
-}
-
-func (d *smPDU) String() string {
-	buf := new(strings.Builder)
-	fmt.Fprintln(buf, "| service_type:           ", d.SvcType)
-	fmt.Fprintln(buf, "| source_addr_ton:        ", d.SrcTON)
-	fmt.Fprintln(buf, "| source_addr_npi:        ", d.SrcNPI)
-	fmt.Fprintln(buf, "| source_addr:            ", d.SrcAddr)
-	fmt.Fprintln(buf, "| dest_addr_ton:          ", d.DstTON)
-	fmt.Fprintln(buf, "| dest_addr_npi:          ", d.DstNPI)
-	fmt.Fprintln(buf, "| destination_addr:       ", d.DstAddr)
-	fmt.Fprintln(buf, "| esm_class:              ", d.EsmClass)
-	fmt.Fprintln(buf, "| protocol_id:            ", d.ProtocolId)
-	fmt.Fprintln(buf, "| priority_flag:          ", d.PriorityFlag)
-	fmt.Fprintln(buf, "| schedule_delivery_time: ", d.ScheduleDeliveryTime)
-	fmt.Fprintln(buf, "| validity_period:        ", d.ValidityPeriod)
-	fmt.Fprintln(buf, "| registered_delivery:    ", d.RegisteredDelivery)
-	fmt.Fprintln(buf, "| replace_if_present_flag:", d.ReplaceIfPresentFlag)
-	fmt.Fprintln(buf, "| data_coding:            ", d.DataCoding)
-	fmt.Fprintln(buf, "| sm_default_msg_id:      ", d.SmDefaultMsgId)
-	fmt.Fprintln(buf, "| sm_length:              ", len(d.ShortMessage))
-	fmt.Fprintf(buf, "| short_message:          0x% x\n", d.ShortMessage)
-	fmt.Fprint(buf, "| optional_parameters:")
-	for t, v := range d.Param {
-		fmt.Fprintf(buf, "\n| | %#04x: 0x% x", t, v)
-	}
-	return buf.String()
-}
-
-func (d *smPDU) Marshal() []byte {
-	w := bytes.Buffer{}
-
-	writeCString([]byte(d.SvcType), &w)
-	w.WriteByte(d.SrcTON)
-	w.WriteByte(d.SrcNPI)
-	writeCString([]byte(d.SrcAddr), &w)
-	w.WriteByte(d.DstTON)
-	w.WriteByte(d.DstNPI)
-	writeCString([]byte(d.DstAddr), &w)
-	w.WriteByte(d.EsmClass)
-	w.WriteByte(d.ProtocolId)
-	w.WriteByte(d.PriorityFlag)
-	writeCString([]byte(d.ScheduleDeliveryTime), &w)
-	writeCString([]byte(d.ValidityPeriod), &w)
-	w.WriteByte(d.RegisteredDelivery)
-	w.WriteByte(d.ReplaceIfPresentFlag)
-	w.WriteByte(d.DataCoding)
-	w.WriteByte(d.SmDefaultMsgId)
-	// w.WriteByte(d.SmLength)
-	w.WriteByte(byte(len(d.ShortMessage)))
-	w.Write(d.ShortMessage)
-
-	for k, v := range d.Param {
-		writeTLV(k, v, &w)
-	}
-
-	return w.Bytes()
-}
-
-func (d *smPDU) Unmarshal(data []byte) (e error) {
-	buf := bytes.NewBuffer(data)
-	var l byte
-	if d.SvcType, e = readCString(buf); e != nil {
-	} else if d.SrcTON, e = buf.ReadByte(); e != nil {
-	} else if d.SrcNPI, e = buf.ReadByte(); e != nil {
-	} else if d.SrcAddr, e = readCString(buf); e != nil {
-	} else if d.DstTON, e = buf.ReadByte(); e != nil {
-	} else if d.DstNPI, e = buf.ReadByte(); e != nil {
-	} else if d.DstAddr, e = readCString(buf); e != nil {
-	} else if d.EsmClass, e = buf.ReadByte(); e != nil {
-	} else if d.ProtocolId, e = buf.ReadByte(); e != nil {
-	} else if d.PriorityFlag, e = buf.ReadByte(); e != nil {
-	} else if d.ScheduleDeliveryTime, e = readCString(buf); e != nil {
-	} else if d.ValidityPeriod, e = readCString(buf); e != nil {
-	} else if d.RegisteredDelivery, e = buf.ReadByte(); e != nil {
-	} else if d.ReplaceIfPresentFlag, e = buf.ReadByte(); e != nil {
-	} else if d.DataCoding, e = buf.ReadByte(); e != nil {
-	} else if d.SmDefaultMsgId, e = buf.ReadByte(); e != nil {
-	} else if l, e = buf.ReadByte(); e != nil {
-	} else {
-		d.ShortMessage = make([]byte, int(l))
-		_, e = buf.Read(d.ShortMessage)
-	}
-
-	if e == nil {
-		d.Param = make(map[uint16]OctetData)
-		for {
-			t, v, e2 := readTLV(buf)
-			if e2 == io.EOF {
-				break
-			}
-			if e2 != nil {
-				e = e2
-				break
-			}
-			d.Param[t] = v
-		}
-	}
-	return
-}
+func (*genericNack) CommandID() CommandID   { return GenericNack }
+func (*genericNack) String() string         { return "" }
+func (*genericNack) Marshal() []byte        { return []byte{} }
+func (*genericNack) Unmarshal([]byte) error { return nil }

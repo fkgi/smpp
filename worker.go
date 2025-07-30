@@ -47,8 +47,7 @@ func init() {
 }
 
 func handleMsg(msg message) {
-	var req Request
-	var res Response
+	var req, res PDU
 
 	switch msg.id {
 	case SubmitSm:
@@ -67,25 +66,22 @@ func handleMsg(msg message) {
 
 	stat := StatSysErr
 	if e := req.Unmarshal(msg.body); e != nil || RequestHandler == nil {
+		res = &genericNack{}
 	} else if stat, res = RequestHandler(msg.bind.BindInfo, req); res == nil {
-		msg.bind.eventQ <- message{
-			id:       GenericNack,
-			stat:     stat,
-			seq:      msg.seq,
-			callback: dummyCallback}
-	} else {
-		msg.bind.eventQ <- message{
-			id:       res.CommandID(),
-			stat:     stat,
-			seq:      msg.seq,
-			body:     res.Marshal(),
-			callback: dummyCallback}
+		// reject
+		return
 	}
+	msg.bind.eventQ <- message{
+		id:       res.CommandID(),
+		stat:     stat,
+		seq:      msg.seq,
+		body:     res.Marshal(),
+		callback: dummyCallback}
 }
 
 var dummyCallback = make(chan message)
 
-var RequestHandler = func(info BindInfo, pdu Request) (StatusCode, Response) {
+var RequestHandler = func(info BindInfo, pdu PDU) (StatusCode, PDU) {
 	/*
 		const l = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
