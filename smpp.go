@@ -11,6 +11,7 @@ var (
 	// WhiteList []BindInfo
 	KeepAlive = time.Second * 30
 	Expire    = time.Second
+	Indent    = "| "
 
 	sequence = make(chan uint32, 1)
 )
@@ -60,8 +61,8 @@ const (
 	DataSm              CommandID = 0x00000103
 	DataSmResp          CommandID = 0x80000103
 
-	CloseConnection CommandID = 0xf0000001
-	InternalFailure CommandID = 0xf0000000
+	closeConnection CommandID = 0xf0000001
+	internalFailure CommandID = 0xf0000000
 )
 
 func (c CommandID) IsRequest() bool {

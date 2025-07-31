@@ -26,7 +26,7 @@ func (b *Bind) serve() error {
 		b.eventQ <- msg
 		wt := time.AfterFunc(Expire, func() {
 			b.eventQ <- message{
-				id:   InternalFailure,
+				id:   internalFailure,
 				stat: 0xFFFFFFFF,
 				seq:  msg.seq}
 		})
@@ -56,7 +56,7 @@ func (b *Bind) serve() error {
 				}
 			} else {
 				// Rx event
-				if msg.id == CloseConnection {
+				if msg.id == closeConnection {
 					break
 				} else if msg.id == EnquireLink {
 					e = b.writePDU(message{
@@ -107,7 +107,7 @@ func (b *Bind) serve() error {
 	enquireT.Stop()
 	b.BindType = NilBind
 	b.con.Close()
-	b.eventQ <- message{id: CloseConnection}
+	b.eventQ <- message{id: closeConnection}
 
 	return nil
 }

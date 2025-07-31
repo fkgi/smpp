@@ -22,7 +22,7 @@ func (d *bindReq) CommandID() CommandID { return d.cmd }
 
 func (d *bindReq) String() string {
 	buf := new(strings.Builder)
-	fmt.Fprintln(buf, "| system_id:         ", d.SystemID)
+	fmt.Fprintf(buf, "%ssystem_id         : %s", Indent, d.SystemID)
 	fmt.Fprintln(buf, "| passsword:         ", d.Password)
 	fmt.Fprintln(buf, "| system_type:       ", d.SystemType)
 	fmt.Fprintln(buf, "| interface_version: ", d.Version)

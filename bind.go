@@ -198,7 +198,7 @@ func (b *Bind) Close() {
 
 	wt := time.AfterFunc(Expire, func() {
 		b.eventQ <- message{
-			id:   InternalFailure,
+			id:   internalFailure,
 			stat: 0xFFFFFFFF,
 			seq:  msg.seq}
 	})
@@ -223,7 +223,7 @@ func (b *Bind) Send(r PDU) (s StatusCode, a PDU, e error) {
 
 	wt := time.AfterFunc(Expire, func() {
 		b.eventQ <- message{
-			id:   InternalFailure,
+			id:   internalFailure,
 			stat: 0xFFFFFFFF,
 			seq:  msg.seq}
 	})
@@ -235,7 +235,7 @@ func (b *Bind) Send(r PDU) (s StatusCode, a PDU, e error) {
 	case SubmitSmResp, DeliverSmResp, DataSmResp, GenericNack:
 		a = MakePDUof(msg.id)
 		e = a.Unmarshal(msg.body)
-	case InternalFailure:
+	case internalFailure:
 		e = errors.New("request timeout")
 	default:
 		e = errors.New("unexpected response")
