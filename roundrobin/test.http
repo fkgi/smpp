@@ -16,8 +16,31 @@ content-type: application/json
     "registered_delivery": 0,
     "data_coding": 0,
     "options": {
-        "1060": "dGVzdGRhdGE="
+        "1060": "0000"
     }
+}
+
+###
+POST {{url}}/smppmsg/v1/submit
+content-type: application/json
+
+{
+    "svc_type": "svc1",
+    "src_ton": 0,
+    "src_npi": 9,
+    "src_addr": "123",
+    "dst_ton": 1,
+    "dst_npi": 1,
+    "dst_addr": "819099990001",
+    "esm_class": 0,
+    "protocol_id": 0,
+    "priority_flag": 0,
+    "registered_delivery": 0,
+    "replace_if_present_flag": 0,
+    "data_coding": 8,
+    "sm_default_sm_id": 0,
+    "short_message": "01400b819010325476f800080a3042304430463048304a",
+    "options": {}
 }
 
 ###
@@ -28,20 +51,16 @@ content-type: application/json
     "svc_type": "svc1",
     "src_ton": 1,
     "src_npi": 1,
-    "src_addr": "123",
-    "dst_ton": 1,
-    "dst_npi": 1,
-    "dst_addr": "987",
-    "esm_class": 1,
-    "protocol_id": 1,
-    "priority_flag": 1,
-    "schedule_delivery_time": "",
-    "validity_period": "",
-    "registered_delivery": 1,
-    "replace_if_present_flag": 1,
-    "data_coding": 1,
-    "sm_default_sm_id": 1,
-    "short_message": "",
+    "src_addr": "819099990001",
+    "dst_ton": 0,
+    "dst_npi": 9,
+    "dst_addr": "123",
+    "esm_class": 0,
+    "protocol_id": 0,
+    "priority_flag": 0,
+    "registered_delivery": 0,
+    "data_coding": 8,
+    "short_message": "4004802143000852801041121363100500038402013042304430463048304a",
     "options": {}
 }
 

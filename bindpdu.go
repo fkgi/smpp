@@ -22,13 +22,13 @@ func (d *bindReq) CommandID() CommandID { return d.cmd }
 
 func (d *bindReq) String() string {
 	buf := new(strings.Builder)
-	fmt.Fprintf(buf, "%ssystem_id         : %s", Indent, d.SystemID)
-	fmt.Fprintln(buf, "| passsword:         ", d.Password)
-	fmt.Fprintln(buf, "| system_type:       ", d.SystemType)
-	fmt.Fprintln(buf, "| interface_version: ", d.Version)
-	fmt.Fprintln(buf, "| addr_ton:          ", d.AddrTON)
-	fmt.Fprintln(buf, "| addr_npi:          ", d.AddrNPI)
-	fmt.Fprintln(buf, "| address_range:     ", d.AddrRange)
+	fmt.Fprintln(buf, Indent, "system_id         :", d.SystemID)
+	fmt.Fprintln(buf, Indent, "passsword         :", d.Password)
+	fmt.Fprintln(buf, Indent, "system_type       :", d.SystemType)
+	fmt.Fprintln(buf, Indent, "interface_version :", d.Version)
+	fmt.Fprintln(buf, Indent, "addr_ton          :", d.AddrTON)
+	fmt.Fprintln(buf, Indent, "addr_npi          :", d.AddrNPI)
+	fmt.Fprintln(buf, Indent, "address_range     :", d.AddrRange)
 	return buf.String()
 }
 
@@ -68,8 +68,8 @@ func (d *bindRes) CommandID() CommandID { return d.cmd }
 
 func (d *bindRes) String() string {
 	buf := new(strings.Builder)
-	fmt.Fprintln(buf, "| system_id:            ", d.SystemID)
-	fmt.Fprintln(buf, "| sc_interface_version: ", d.Version)
+	fmt.Fprintln(buf, Indent, "system_id           :", d.SystemID)
+	fmt.Fprintln(buf, Indent, "sc_interface_version:", d.Version)
 	return buf.String()
 }
 

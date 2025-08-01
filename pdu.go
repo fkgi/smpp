@@ -123,6 +123,9 @@ func (b *Bind) writePDU(msg message) (e error) {
 
 func readCString(buf *bytes.Buffer) (string, error) {
 	b, e := buf.ReadBytes(0x00)
+	if e != nil {
+		b = []byte{0x00}
+	}
 	return string(b[:len(b)-1]), e
 }
 

@@ -44,10 +44,23 @@ type Bind struct {
 	con      net.Conn
 	eventQ   chan message
 	reqStack map[uint32]chan message
+	sequence chan uint32
+}
+
+func (b *Bind) nextSequence() uint32 {
+	ret := <-b.sequence
+	if ret == 0x7fffffff {
+		b.sequence <- 1
+	} else {
+		b.sequence <- ret + 1
+	}
+	return ret
 }
 
 func (b *Bind) ListenAndServe(c net.Conn) (e error) {
 	b.con = c
+	b.sequence = make(chan uint32, 1)
+	b.sequence <- 1
 
 	msg, e := b.readPDU()
 	if e != nil {
@@ -116,6 +129,8 @@ func (b *Bind) ListenAndServe(c net.Conn) (e error) {
 
 func (b *Bind) DialAndServe(c net.Conn) (e error) {
 	b.con = c
+	b.sequence = make(chan uint32, 1)
+	b.sequence <- 1
 
 	defer func() {
 		if e != nil {
@@ -141,7 +156,7 @@ func (b *Bind) DialAndServe(c net.Conn) (e error) {
 	default:
 		return errors.New("invalid bind type")
 	}
-	seq := nextSequence()
+	seq := b.nextSequence()
 
 	if e = b.writePDU(message{
 		id:   req.CommandID(),
@@ -186,13 +201,13 @@ func (b *Bind) DialAndServe(c net.Conn) (e error) {
 }
 
 func (b *Bind) Close() {
-	if b.BindType == NilBind {
+	if b.reqStack == nil {
 		return
 	}
 
 	msg := message{
 		id:       Unbind,
-		seq:      nextSequence(),
+		seq:      b.nextSequence(),
 		callback: make(chan message)}
 	b.eventQ <- msg
 
@@ -209,14 +224,14 @@ func (b *Bind) Close() {
 }
 
 func (b *Bind) Send(r PDU) (s StatusCode, a PDU, e error) {
-	if b.BindType == NilBind {
+	if b.reqStack == nil {
 		e = errors.New("closed bind")
 		return
 	}
 
 	msg := message{
 		id:       r.CommandID(),
-		seq:      nextSequence(),
+		seq:      b.nextSequence(),
 		body:     r.Marshal(),
 		callback: make(chan message)}
 	b.eventQ <- msg
@@ -241,4 +256,8 @@ func (b *Bind) Send(r PDU) (s StatusCode, a PDU, e error) {
 		e = errors.New("unexpected response")
 	}
 	return
+}
+
+func (b *Bind) IsActive() bool {
+	return b.reqStack != nil
 }

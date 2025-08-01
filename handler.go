@@ -21,7 +21,7 @@ func (b *Bind) serve() error {
 	enquireT := time.AfterFunc(KeepAlive, func() {
 		msg := message{
 			id:       EnquireLink,
-			seq:      nextSequence(),
+			seq:      b.nextSequence(),
 			callback: make(chan message)}
 		b.eventQ <- msg
 		wt := time.AfterFunc(Expire, func() {
@@ -86,6 +86,7 @@ func (b *Bind) serve() error {
 				b.con.Close()
 			}
 		}
+		b.reqStack = nil
 	}()
 
 	// worker for Rx data from socket
@@ -105,7 +106,6 @@ func (b *Bind) serve() error {
 	}
 
 	enquireT.Stop()
-	b.BindType = NilBind
 	b.con.Close()
 	b.eventQ <- message{id: closeConnection}
 

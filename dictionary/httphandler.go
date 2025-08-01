@@ -1,18 +1,16 @@
-package main
+package dictionary
 
 import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log"
 	"net/http"
 
 	"github.com/fkgi/smpp"
 )
 
-func handleHTTP(w http.ResponseWriter, r *http.Request, req smpp.PDU, b smpp.Bind) {
+func HandleHTTP(w http.ResponseWriter, r *http.Request, req smpp.PDU, b *smpp.Bind) {
 	if r.Method != http.MethodPost {
-		log.Println("[INFO]", "invalid HTTP request method:", r.Method)
 		w.Header().Add("Allow", "POST")
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -21,20 +19,20 @@ func handleHTTP(w http.ResponseWriter, r *http.Request, req smpp.PDU, b smpp.Bin
 	jsondata, e := io.ReadAll(r.Body)
 	defer r.Body.Close()
 	if e != nil {
-		log.Println("[ERROR]", "failed to read request:", e)
-		httpErr("unable to read request body", e.Error(), http.StatusBadRequest, w)
+		httpErr("unable to read HTTP request body", e.Error(),
+			http.StatusBadRequest, w)
 		return
 	}
 	if e = json.Unmarshal(jsondata, &req); e != nil {
-		log.Println("[ERROR]", "failed to unmarshal request from JSON:", e)
-		httpErr("unexpected JSON data", e.Error(), http.StatusBadRequest, w)
+		httpErr("invalid JSON data", e.Error(),
+			http.StatusBadRequest, w)
 		return
 	}
 
 	stat, res, e := b.Send(req)
 	if e != nil {
-		log.Println("[ERROR]", "failed to send SMPP request:", e)
-		httpErr("failed to send request", e.Error(), http.StatusInternalServerError, w)
+		httpErr("failed to send SMPP request", e.Error(),
+			http.StatusInternalServerError, w)
 		return
 	}
 
@@ -62,8 +60,8 @@ func handleHTTP(w http.ResponseWriter, r *http.Request, req smpp.PDU, b smpp.Bin
 	}
 
 	if e != nil {
-		log.Println("[ERROR]", "failed to marshal response to JSON:", e)
-		httpErr("failed to unmarshal response", e.Error(), http.StatusInternalServerError, w)
+		httpErr("unable to unmarshal response to JSON", e.Error(),
+			http.StatusInternalServerError, w)
 		return
 	}
 
@@ -73,6 +71,10 @@ func handleHTTP(w http.ResponseWriter, r *http.Request, req smpp.PDU, b smpp.Bin
 }
 
 func httpErr(title, detail string, code int, w http.ResponseWriter) {
+	if NotifyHandlerError != nil {
+		NotifyHandlerError("HTTP", title+": "+detail)
+	}
+
 	data, _ := json.Marshal(struct {
 		T string `json:"title"`
 		D string `json:"detail"`

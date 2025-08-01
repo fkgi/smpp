@@ -1,4 +1,4 @@
-package main
+package dictionary
 
 import "github.com/fkgi/smpp"
 
@@ -37,3 +37,5 @@ type GenericNack struct {
 
 func (r *GenericNack) status() smpp.StatusCode { return r.Status }
 func (r *GenericNack) unwrap() smpp.PDU        { return nil }
+
+var NotifyHandlerError func(proto, msg string) = nil

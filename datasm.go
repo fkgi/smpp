@@ -25,19 +25,19 @@ type DataSM struct {
 
 func (d *DataSM) String() string {
 	buf := new(strings.Builder)
-	fmt.Fprintln(buf, "| service_type:       ", d.SvcType)
-	fmt.Fprintln(buf, "| source_addr_ton:    ", d.SrcTON)
-	fmt.Fprintln(buf, "| source_addr_npi:    ", d.SrcNPI)
-	fmt.Fprintln(buf, "| source_addr:        ", d.SrcAddr)
-	fmt.Fprintln(buf, "| dest_addr_ton:      ", d.DstTON)
-	fmt.Fprintln(buf, "| dest_addr_npi:      ", d.DstNPI)
-	fmt.Fprintln(buf, "| destination_addr:   ", d.DstAddr)
-	fmt.Fprintln(buf, "| esm_class:          ", d.EsmClass)
-	fmt.Fprintln(buf, "| registered_delivery:", d.RegisteredDelivery)
-	fmt.Fprintln(buf, "| data_coding:        ", d.DataCoding)
-	fmt.Fprint(buf, "| optional_parameters:")
+	fmt.Fprintln(buf, Indent, "service_type       :", d.SvcType)
+	fmt.Fprintln(buf, Indent, "source_addr_ton    :", d.SrcTON)
+	fmt.Fprintln(buf, Indent, "source_addr_npi    :", d.SrcNPI)
+	fmt.Fprintln(buf, Indent, "source_addr        :", d.SrcAddr)
+	fmt.Fprintln(buf, Indent, "dest_addr_ton      :", d.DstTON)
+	fmt.Fprintln(buf, Indent, "dest_addr_npi      :", d.DstNPI)
+	fmt.Fprintln(buf, Indent, "destination_addr   :", d.DstAddr)
+	fmt.Fprintln(buf, Indent, "esm_class          :", d.EsmClass)
+	fmt.Fprintln(buf, Indent, "registered_delivery:", d.RegisteredDelivery)
+	fmt.Fprintln(buf, Indent, "data_coding        :", d.DataCoding)
+	fmt.Fprint(buf, Indent, " optional_parameters:")
 	for t, v := range d.Param {
-		fmt.Fprintf(buf, "\n| | %#04x: 0x% x", t, v)
+		fmt.Fprintf(buf, "\n%s %s %#04x: 0x% x", Indent, Indent, t, v)
 	}
 	return buf.String()
 }
@@ -98,10 +98,10 @@ type DataSM_resp struct {
 
 func (d *DataSM_resp) String() string {
 	buf := new(strings.Builder)
-	fmt.Fprintln(buf, "| id:", d.MessageID)
-	fmt.Fprint(buf, "| optional_parameters:")
+	fmt.Fprintln(buf, Indent, "id:", d.MessageID)
+	fmt.Fprint(buf, Indent, " optional_parameters:")
 	for t, v := range d.Param {
-		fmt.Fprintf(buf, "\n| | %#04x: %# x", t, v)
+		fmt.Fprintf(buf, "\n%s %s %#04x: %# x", Indent, Indent, t, v)
 	}
 	return buf.String()
 }

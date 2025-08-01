@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/fkgi/smpp"
+	"github.com/fkgi/smpp/dictionary"
 )
 
 func printHelp() {
@@ -27,7 +28,6 @@ func printHelp() {
 }
 
 var (
-	backend  string
 	verbose  *bool
 	bindType *string
 )
@@ -42,7 +42,7 @@ func main() {
 	ph := flag.String("b", "", "HTTP backend address")
 	bindType = flag.String("d", "svr", "Bind type of client [tx/rx/trx] or server [svr]")
 	pw := flag.String("p", "", "Password for ESME authentication")
-	st := flag.String("y", "ROUNDROBIN", "Type of ESME system")
+	st := flag.String("y", "DEBUGGER", "Type of ESME system")
 	tn := flag.Uint("o", 0, "Type of Number for ESME address")
 	np := flag.Uint("n", 0, "Numbering Plan Indicator for ESME address")
 	ar := flag.String("a", "", "UNIX Regular Expression notation of ESME address")
@@ -111,26 +111,24 @@ func main() {
 		log.Print("[INFO]", buf)
 	}
 
-	sigc := make(chan os.Signal, 1)
-
-	backend = "http://" + *ph
-	_, e = url.Parse(backend)
+	dictionary.Backend = "http://" + *ph
+	_, e = url.Parse(dictionary.Backend)
 	if e != nil || len(*ph) == 0 {
 		log.Println("[ERROR]", "invalid HTTP backend host, SMPP answer will be always failed")
-		backend = ""
+		dictionary.Backend = ""
 	} else {
-		log.Println("[INFO]", "HTTP backend:", backend)
-		smpp.RequestHandler = handleSMPP
+		log.Println("[INFO]", "HTTP backend:", dictionary.Backend)
+		smpp.RequestHandler = dictionary.HandleSMPP
 	}
 
 	http.HandleFunc("/smppmsg/v1/data", func(w http.ResponseWriter, r *http.Request) {
-		handleHTTP(w, r, &smpp.DataSM{}, bind)
+		dictionary.HandleHTTP(w, r, &smpp.DataSM{}, &bind)
 	})
 	http.HandleFunc("/smppmsg/v1/deliver", func(w http.ResponseWriter, r *http.Request) {
-		handleHTTP(w, r, &smpp.DeliverSM{}, bind)
+		dictionary.HandleHTTP(w, r, &smpp.DeliverSM{}, &bind)
 	})
 	http.HandleFunc("/smppmsg/v1/submit", func(w http.ResponseWriter, r *http.Request) {
-		handleHTTP(w, r, &smpp.SubmitSM{}, bind)
+		dictionary.HandleHTTP(w, r, &smpp.SubmitSM{}, &bind)
 	})
 
 	log.Println("[INFO]", "listening HTTP...\n| local port:", *lh)
@@ -141,7 +139,8 @@ func main() {
 		}
 	}()
 
-	go func() {
+	close := func() {
+		sigc := make(chan os.Signal, 1)
 		signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 		if call := <-sigc; call != nil {
 			log.Println("[INFO]", "closing bind")
@@ -149,7 +148,7 @@ func main() {
 			time.Sleep(time.Second * 5)
 			os.Exit(0)
 		}
-	}()
+	}
 
 	if *bindType == "svr" {
 		// run as SMSC
@@ -182,6 +181,7 @@ func main() {
 		}
 		l.Close()
 
+		go close()
 		log.Println("[INFO]", "closed, error=", bind.ListenAndServe(c))
 	} else {
 		// run as ESME
@@ -199,6 +199,7 @@ func main() {
 			log.Fatalln(e)
 		}
 
+		go close()
 		log.Println("[INFO]", "closed, error=", bind.DialAndServe(c))
 	}
 }

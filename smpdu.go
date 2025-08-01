@@ -33,31 +33,31 @@ type smPDU struct {
 
 func (d *smPDU) String() string {
 	buf := new(strings.Builder)
-	fmt.Fprintln(buf, "| service_type           :", d.SvcType)
-	fmt.Fprintln(buf, "| source_addr_ton        :", d.SrcTON)
-	fmt.Fprintln(buf, "| source_addr_npi        :", d.SrcNPI)
-	fmt.Fprintln(buf, "| source_addr            :", d.SrcAddr)
-	fmt.Fprintln(buf, "| dest_addr_ton          :", d.DstTON)
-	fmt.Fprintln(buf, "| dest_addr_npi          :", d.DstNPI)
-	fmt.Fprintln(buf, "| destination_addr       :", d.DstAddr)
-	fmt.Fprintln(buf, "| esm_class              :", d.EsmClass)
-	fmt.Fprintln(buf, "| protocol_id            :", d.ProtocolId)
-	fmt.Fprintln(buf, "| priority_flag          :", d.PriorityFlag)
-	fmt.Fprintln(buf, "| schedule_delivery_time :", d.ScheduleDeliveryTime)
-	fmt.Fprintln(buf, "| validity_period        :", d.ValidityPeriod)
-	fmt.Fprintln(buf, "| registered_delivery    :", d.RegisteredDelivery)
-	fmt.Fprintln(buf, "| replace_if_present_flag:", d.ReplaceIfPresentFlag)
-	fmt.Fprintln(buf, "| data_coding            :", d.DataCoding)
-	fmt.Fprintln(buf, "| sm_default_msg_id      :", d.SmDefaultMsgId)
-	fmt.Fprintln(buf, "| sm_length              :", len(d.ShortMessage))
+	fmt.Fprintln(buf, Indent, "service_type           :", d.SvcType)
+	fmt.Fprintln(buf, Indent, "source_addr_ton        :", d.SrcTON)
+	fmt.Fprintln(buf, Indent, "source_addr_npi        :", d.SrcNPI)
+	fmt.Fprintln(buf, Indent, "source_addr            :", d.SrcAddr)
+	fmt.Fprintln(buf, Indent, "dest_addr_ton          :", d.DstTON)
+	fmt.Fprintln(buf, Indent, "dest_addr_npi          :", d.DstNPI)
+	fmt.Fprintln(buf, Indent, "destination_addr       :", d.DstAddr)
+	fmt.Fprintln(buf, Indent, "esm_class              :", d.EsmClass)
+	fmt.Fprintln(buf, Indent, "protocol_id            :", d.ProtocolId)
+	fmt.Fprintln(buf, Indent, "priority_flag          :", d.PriorityFlag)
+	fmt.Fprintln(buf, Indent, "schedule_delivery_time :", d.ScheduleDeliveryTime)
+	fmt.Fprintln(buf, Indent, "validity_period        :", d.ValidityPeriod)
+	fmt.Fprintln(buf, Indent, "registered_delivery    :", d.RegisteredDelivery)
+	fmt.Fprintln(buf, Indent, "replace_if_present_flag:", d.ReplaceIfPresentFlag)
+	fmt.Fprintln(buf, Indent, "data_coding            :", d.DataCoding)
+	fmt.Fprintln(buf, Indent, "sm_default_msg_id      :", d.SmDefaultMsgId)
+	fmt.Fprintln(buf, Indent, "sm_length              :", len(d.ShortMessage))
 	if len(d.ShortMessage) != 0 {
-		fmt.Fprintf(buf, "| short_message          :0x% x\n", d.ShortMessage)
+		fmt.Fprintf(buf, "%s short_message          :0x% x\n", Indent, d.ShortMessage)
 	} else {
-		fmt.Fprintln(buf, "| short_message          :")
+		fmt.Fprintln(buf, Indent, "short_message          :")
 	}
-	fmt.Fprint(buf, "| optional_parameters:")
+	fmt.Fprint(buf, Indent, " optional_parameters:")
 	for t, v := range d.Param {
-		fmt.Fprintf(buf, "\n| | %#04x: 0x% x", t, v)
+		fmt.Fprintf(buf, "\n%s %s %#04x: 0x% x", Indent, Indent, t, v)
 	}
 	return buf.String()
 }
@@ -141,10 +141,10 @@ type SubmitSM struct {
 func (*SubmitSM) CommandID() CommandID { return SubmitSm }
 
 type SubmitSM_resp struct {
-	MessageID string `json:"id"`
+	MessageID string `json:"id,omitempty"`
 }
 
-func (d *SubmitSM_resp) String() string     { return "| id: " + d.MessageID }
+func (d *SubmitSM_resp) String() string     { return Indent + " id: " + d.MessageID }
 func (*SubmitSM_resp) CommandID() CommandID { return SubmitSmResp }
 
 func (d *SubmitSM_resp) Marshal() []byte {
@@ -156,8 +156,10 @@ func (d *SubmitSM_resp) Marshal() []byte {
 }
 
 func (d *SubmitSM_resp) Unmarshal(data []byte) (e error) {
-	buf := bytes.NewBuffer(data)
-	d.MessageID, e = readCString(buf)
+	if len(data) != 0 {
+		buf := bytes.NewBuffer(data)
+		d.MessageID, e = readCString(buf)
+	}
 	return
 }
 

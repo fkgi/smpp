@@ -1,16 +1,17 @@
-package main
+package dictionary
 
 import (
 	"bytes"
 	"encoding/json"
 	"io"
-	"log"
 	"net/http"
 
 	"github.com/fkgi/smpp"
 )
 
-func handleSMPP(info smpp.BindInfo, req smpp.PDU) (smpp.StatusCode, smpp.PDU) {
+var Backend string
+
+func HandleSMPP(info smpp.BindInfo, req smpp.PDU) (smpp.StatusCode, smpp.PDU) {
 	var res wrappedResp
 	var path string
 	switch req.(type) {
@@ -20,46 +21,62 @@ func handleSMPP(info smpp.BindInfo, req smpp.PDU) (smpp.StatusCode, smpp.PDU) {
 	case *smpp.DeliverSM:
 		path = "/smppmsg/v1/deliver"
 		res = &DeliverSM_resp{}
+		if info.BindType == smpp.TxBind {
+			smppErr("deliver_sm is notaccepted in Tx BIND", nil)
+			return smpp.StatInvCmdID, smpp.MakePDUof(smpp.GenericNack)
+		}
 	case *smpp.SubmitSM:
 		path = "/smppmsg/v1/submit"
 		res = &SubmitSM_resp{}
+		if info.BindType == smpp.RxBind {
+			smppErr("submit_sm is notaccepted in Rx BIND", nil)
+			return smpp.StatInvCmdID, smpp.MakePDUof(smpp.GenericNack)
+		}
 	default:
-		log.Println("[ERROR]", "unknown SMPP request")
-		return smpp.StatSysErr, smpp.MakePDUof(smpp.GenericNack)
+		smppErr("unknown SMPP request", nil)
+		return smpp.StatInvCmdID, smpp.MakePDUof(smpp.GenericNack)
 	}
 
 	jsondata, e := json.Marshal(req)
 	if e != nil {
-		log.Println("[ERROR]", "failed to marshal request to JSON:", e)
+		smppErr("failed to marshal request to JSON", e)
 		return smpp.StatSysErr, res.unwrap()
 	}
 
-	r, e := http.Post(backend+path, "application/json", bytes.NewBuffer(jsondata))
+	r, e := http.Post(Backend+path, "application/json", bytes.NewBuffer(jsondata))
 	if e != nil {
-		log.Println("[ERROR]", "failed to send HTTP request:", e)
+		smppErr("failed to send HTTP request", e)
 		return smpp.StatSysErr, res.unwrap()
 	}
 
 	if r.StatusCode == http.StatusServiceUnavailable {
-		log.Println("[INFO]", "reject request")
 		return smpp.StatSysErr, nil
 	}
 
 	if r.StatusCode != http.StatusOK && r.StatusCode != http.StatusCreated {
-		log.Println("[INFO]", "error response from HTTP")
 		return smpp.StatSysErr, smpp.MakePDUof(smpp.GenericNack)
 	}
 
 	jsondata, e = io.ReadAll(r.Body)
 	defer r.Body.Close()
 	if e != nil {
-		log.Println("[ERROR]", "failed to read HTTP response:", e)
+		smppErr("failed to read HTTP response", e)
 		return smpp.StatSysErr, res.unwrap()
 	}
 	if e = json.Unmarshal(jsondata, res); e != nil {
-		log.Println("[ERROR]", "failed to unmarshal JSON HTTP response:", e)
+		smppErr("failed to unmarshal JSON HTTP response", e)
 		return smpp.StatSysErr, res.unwrap()
 	}
 
 	return res.status(), res.unwrap()
+}
+
+func smppErr(s string, e error) {
+	if NotifyHandlerError != nil {
+		if e != nil {
+			NotifyHandlerError("SMPP", s+": "+e.Error())
+		} else {
+			NotifyHandlerError("SMPP", s)
+		}
+	}
 }
