@@ -75,7 +75,7 @@ func handleMsg(msg message) {
 		id:       res.CommandID(),
 		stat:     stat,
 		seq:      msg.seq,
-		body:     res.Marshal(),
+		body:     res.Marshal(msg.bind.ver),
 		callback: dummyCallback}
 }
 

@@ -16,6 +16,7 @@ import (
 
 	"github.com/fkgi/smpp"
 	"github.com/fkgi/smpp/dictionary"
+	"github.com/fkgi/teldata"
 )
 
 var (
@@ -85,8 +86,8 @@ func main() {
 	info := smpp.BindInfo{
 		Password:      *pw,
 		SystemType:    *st,
-		TypeOfNumber:  byte(*tn),
-		NumberingPlan: byte(*np),
+		TypeOfNumber:  teldata.NatureOfAddress(*tn),
+		NumberingPlan: teldata.NumberingPlan(*np),
 		AddressRange:  *ar}
 	if len(frontend) != 0 && len(dictionary.Backend) != 0 {
 		info.BindType = smpp.TRxBind

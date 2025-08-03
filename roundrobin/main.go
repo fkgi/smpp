@@ -16,6 +16,7 @@ import (
 
 	"github.com/fkgi/smpp"
 	"github.com/fkgi/smpp/dictionary"
+	"github.com/fkgi/teldata"
 )
 
 func printHelp() {
@@ -91,8 +92,8 @@ func main() {
 	}
 	bind.Password = *pw
 	bind.SystemType = *st
-	bind.TypeOfNumber = byte(*tn)
-	bind.NumberingPlan = byte(*np)
+	bind.TypeOfNumber = teldata.NatureOfAddress(*tn)
+	bind.NumberingPlan = teldata.NumberingPlan(*np)
 	bind.AddressRange = *ar
 
 	log.Println("[INFO]", "booting Round-Robin diagnostic/debug subsystem for SMPP...")

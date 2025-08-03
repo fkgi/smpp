@@ -44,7 +44,7 @@ func (d *DataSM) String() string {
 
 func (*DataSM) CommandID() CommandID { return DataSm }
 
-func (d *DataSM) Marshal() []byte {
+func (d *DataSM) Marshal(v byte) []byte {
 	w := bytes.Buffer{}
 	writeCString([]byte(d.SvcType), &w)
 	w.WriteByte(d.SrcTON)
@@ -56,8 +56,10 @@ func (d *DataSM) Marshal() []byte {
 	w.WriteByte(d.EsmClass)
 	w.WriteByte(d.RegisteredDelivery)
 	w.WriteByte(d.DataCoding)
-	for k, v := range d.Param {
-		writeTLV(k, v, &w)
+	if v >= 0x34 {
+		for k, v := range d.Param {
+			writeTLV(k, v, &w)
+		}
 	}
 	return w.Bytes()
 }
@@ -108,11 +110,13 @@ func (d *DataSM_resp) String() string {
 
 func (*DataSM_resp) CommandID() CommandID { return DataSmResp }
 
-func (d *DataSM_resp) Marshal() []byte {
+func (d *DataSM_resp) Marshal(v byte) []byte {
 	w := bytes.Buffer{}
 	writeCString([]byte(d.MessageID), &w)
-	for k, v := range d.Param {
-		writeTLV(k, v, &w)
+	if v >= 0x34 {
+		for k, v := range d.Param {
+			writeTLV(k, v, &w)
+		}
 	}
 	return w.Bytes()
 }

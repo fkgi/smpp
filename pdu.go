@@ -12,7 +12,7 @@ import (
 
 type PDU interface {
 	CommandID() CommandID
-	Marshal() []byte
+	Marshal(byte) []byte
 	Unmarshal([]byte) error
 	fmt.Stringer
 }
@@ -173,5 +173,5 @@ type genericNack struct{}
 
 func (*genericNack) CommandID() CommandID   { return GenericNack }
 func (*genericNack) String() string         { return "" }
-func (*genericNack) Marshal() []byte        { return []byte{} }
+func (*genericNack) Marshal(byte) []byte    { return []byte{} }
 func (*genericNack) Unmarshal([]byte) error { return nil }

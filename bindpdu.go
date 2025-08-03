@@ -5,17 +5,19 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/fkgi/teldata"
 )
 
 type bindReq struct {
 	cmd        CommandID
-	SystemID   string `json:"system_id"`
-	Password   string `json:"passsword"`
-	SystemType string `json:"system_type"`
-	Version    byte   `json:"interface_version"`
-	AddrTON    byte   `json:"addr_ton"`
-	AddrNPI    byte   `json:"addr_npi"`
-	AddrRange  string `json:"address_range"`
+	SystemID   string                  `json:"system_id"`
+	Password   string                  `json:"passsword"`
+	SystemType string                  `json:"system_type"`
+	Version    byte                    `json:"interface_version"`
+	AddrTON    teldata.NatureOfAddress `json:"addr_ton"`
+	AddrNPI    teldata.NumberingPlan   `json:"addr_npi"`
+	AddrRange  string                  `json:"address_range"`
 }
 
 func (d *bindReq) CommandID() CommandID { return d.cmd }
@@ -32,27 +34,30 @@ func (d *bindReq) String() string {
 	return buf.String()
 }
 
-func (d *bindReq) Marshal() []byte {
+func (d *bindReq) Marshal(byte) []byte {
 	w := new(bytes.Buffer)
 	writeCString([]byte(d.SystemID), w)
 	writeCString([]byte(d.Password), w)
 	writeCString([]byte(d.SystemType), w)
 	w.WriteByte(d.Version)
-	w.WriteByte(d.AddrTON)
-	w.WriteByte(d.AddrNPI)
+	w.WriteByte(byte(d.AddrTON))
+	w.WriteByte(byte(d.AddrNPI))
 	writeCString([]byte(d.AddrRange), w)
 	return w.Bytes()
 }
 
 func (d *bindReq) Unmarshal(data []byte) (e error) {
 	buf := bytes.NewBuffer(data)
+	var ton, npi byte
 	if d.SystemID, e = readCString(buf); e != nil {
 	} else if d.Password, e = readCString(buf); e != nil {
 	} else if d.SystemType, e = readCString(buf); e != nil {
 	} else if d.Version, e = buf.ReadByte(); e != nil {
-	} else if d.AddrTON, e = buf.ReadByte(); e != nil {
-	} else if d.AddrNPI, e = buf.ReadByte(); e != nil {
+	} else if ton, e = buf.ReadByte(); e != nil {
+	} else if npi, e = buf.ReadByte(); e != nil {
 	} else {
+		d.AddrTON = teldata.NatureOfAddress(ton)
+		d.AddrNPI = teldata.NumberingPlan(npi)
 		d.AddrRange, e = readCString(buf)
 	}
 	return
@@ -73,10 +78,12 @@ func (d *bindRes) String() string {
 	return buf.String()
 }
 
-func (d *bindRes) Marshal() []byte {
+func (d *bindRes) Marshal(v byte) []byte {
 	w := new(bytes.Buffer)
 	writeCString([]byte(d.SystemID), w)
-	writeTLV(0x0210, []byte{d.Version}, w)
+	if v >= 0x34 {
+		writeTLV(0x0210, []byte{d.Version}, w)
+	}
 	return w.Bytes()
 }
 
@@ -107,26 +114,26 @@ type unbindReq struct{}
 
 func (*unbindReq) CommandID() CommandID   { return Unbind }
 func (*unbindReq) String() string         { return "" }
-func (*unbindReq) Marshal() []byte        { return []byte{} }
+func (*unbindReq) Marshal(byte) []byte    { return []byte{} }
 func (*unbindReq) Unmarshal([]byte) error { return nil }
 
 type unbindRes struct{}
 
 func (*unbindRes) CommandID() CommandID   { return UnbindResp }
 func (*unbindRes) String() string         { return "" }
-func (*unbindRes) Marshal() []byte        { return []byte{} }
+func (*unbindRes) Marshal(byte) []byte    { return []byte{} }
 func (*unbindRes) Unmarshal([]byte) error { return nil }
 
 type enquireReq struct{}
 
 func (*enquireReq) CommandID() CommandID   { return EnquireLink }
 func (*enquireReq) String() string         { return "" }
-func (*enquireReq) Marshal() []byte        { return []byte{} }
+func (*enquireReq) Marshal(byte) []byte    { return []byte{} }
 func (*enquireReq) Unmarshal([]byte) error { return nil }
 
 type enquireRes struct{}
 
 func (*enquireRes) CommandID() CommandID   { return EnquireLinkResp }
 func (*enquireRes) String() string         { return "" }
-func (*enquireRes) Marshal() []byte        { return []byte{} }
+func (*enquireRes) Marshal(byte) []byte    { return []byte{} }
 func (*enquireRes) Unmarshal([]byte) error { return nil }

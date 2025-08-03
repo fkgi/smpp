@@ -62,9 +62,8 @@ func (d *smPDU) String() string {
 	return buf.String()
 }
 
-func (d *smPDU) Marshal() []byte {
+func (d *smPDU) Marshal(v byte) []byte {
 	w := bytes.Buffer{}
-
 	writeCString([]byte(d.SvcType), &w)
 	w.WriteByte(d.SrcTON)
 	w.WriteByte(d.SrcNPI)
@@ -84,11 +83,11 @@ func (d *smPDU) Marshal() []byte {
 	// w.WriteByte(d.SmLength)
 	w.WriteByte(byte(len(d.ShortMessage)))
 	w.Write(d.ShortMessage)
-
-	for k, v := range d.Param {
-		writeTLV(k, v, &w)
+	if v >= 0x34 {
+		for k, v := range d.Param {
+			writeTLV(k, v, &w)
+		}
 	}
-
 	return w.Bytes()
 }
 
@@ -147,7 +146,7 @@ type SubmitSM_resp struct {
 func (d *SubmitSM_resp) String() string     { return Indent + " id: " + d.MessageID }
 func (*SubmitSM_resp) CommandID() CommandID { return SubmitSmResp }
 
-func (d *SubmitSM_resp) Marshal() []byte {
+func (d *SubmitSM_resp) Marshal(byte) []byte {
 	w := bytes.Buffer{}
 	if len(d.MessageID) != 0 {
 		writeCString([]byte(d.MessageID), &w)
@@ -174,7 +173,7 @@ type DeliverSM_resp struct{}
 func (d *DeliverSM_resp) String() string     { return "" }
 func (*DeliverSM_resp) CommandID() CommandID { return DeliverSmResp }
 
-func (d *DeliverSM_resp) Marshal() []byte {
+func (d *DeliverSM_resp) Marshal(byte) []byte {
 	w := bytes.Buffer{}
 	writeCString([]byte{}, &w)
 	return w.Bytes()

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/fkgi/smpp"
+	"github.com/fkgi/smpp/dictionary"
 )
 
 func init() {
@@ -38,5 +39,9 @@ func init() {
 				i.AddressRange, i.TypeOfNumber, i.NumberingPlan)
 		}
 		log.Println("[INFO]", buf)
+	}
+
+	dictionary.NotifyHandlerError = func(proto, msg string) {
+		log.Println("[ERROR]", "error in", proto, "with reason", msg)
 	}
 }

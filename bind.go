@@ -4,6 +4,8 @@ import (
 	"errors"
 	"net"
 	"time"
+
+	"github.com/fkgi/teldata"
 )
 
 type bindtype int
@@ -34,14 +36,15 @@ type BindInfo struct {
 
 	Password      string
 	SystemType    string
-	TypeOfNumber  byte
-	NumberingPlan byte
+	TypeOfNumber  teldata.NatureOfAddress
+	NumberingPlan teldata.NumberingPlan
 	AddressRange  string
 }
 
 type Bind struct {
 	BindInfo
 	con      net.Conn
+	ver      byte
 	eventQ   chan message
 	reqStack map[uint32]chan message
 	sequence chan uint32
@@ -61,6 +64,7 @@ func (b *Bind) ListenAndServe(c net.Conn) (e error) {
 	b.con = c
 	b.sequence = make(chan uint32, 1)
 	b.sequence <- 1
+	b.ver = 0x34
 
 	msg, e := b.readPDU()
 	if e != nil {
@@ -86,13 +90,12 @@ func (b *Bind) ListenAndServe(c net.Conn) (e error) {
 	}
 
 	req := bindReq{cmd: msg.id}
-	res := bindRes{cmd: msg.id | GenericNack}
+	res := bindRes{
+		cmd:      msg.id | GenericNack,
+		SystemID: ID,
+		Version:  b.ver}
 
-	e = req.Unmarshal(msg.body)
-	if e == nil && req.Version != 0x34 {
-		e = errors.New("invalid version")
-	}
-	if e != nil {
+	if e = req.Unmarshal(msg.body); e != nil {
 		b.writePDU(message{
 			id:   res.CommandID(),
 			stat: StatBindFail,
@@ -108,14 +111,15 @@ func (b *Bind) ListenAndServe(c net.Conn) (e error) {
 	b.NumberingPlan = req.AddrNPI
 	b.AddressRange = req.AddrRange
 
-	res.SystemID = ID
-	res.Version = 0x34
+	if req.Version < b.ver {
+		b.ver = req.Version
+	}
 
 	if e = b.writePDU(message{
 		id:   res.CommandID(),
 		stat: StatOK,
 		seq:  msg.seq,
-		body: res.Marshal()}); e != nil {
+		body: res.Marshal(b.ver)}); e != nil {
 		c.Close()
 		return
 	}
@@ -131,6 +135,7 @@ func (b *Bind) DialAndServe(c net.Conn) (e error) {
 	b.con = c
 	b.sequence = make(chan uint32, 1)
 	b.sequence <- 1
+	b.ver = 0x34
 
 	defer func() {
 		if e != nil {
@@ -142,7 +147,7 @@ func (b *Bind) DialAndServe(c net.Conn) (e error) {
 		SystemID:   ID,
 		Password:   b.Password,
 		SystemType: b.SystemType,
-		Version:    0x34,
+		Version:    b.ver,
 		AddrTON:    b.TypeOfNumber,
 		AddrNPI:    b.NumberingPlan,
 		AddrRange:  b.AddressRange}
@@ -161,7 +166,7 @@ func (b *Bind) DialAndServe(c net.Conn) (e error) {
 	if e = b.writePDU(message{
 		id:   req.CommandID(),
 		seq:  seq,
-		body: req.Marshal()}); e != nil {
+		body: req.Marshal(b.ver)}); e != nil {
 		return
 	}
 
@@ -184,14 +189,13 @@ func (b *Bind) DialAndServe(c net.Conn) (e error) {
 	}
 
 	res := bindRes{cmd: msg.id}
-	e = res.Unmarshal(msg.body)
-	if e == nil && res.Version != 0x34 {
-		e = errors.New("invalid version")
-	}
-	if e != nil {
+	if e = res.Unmarshal(msg.body); e != nil {
 		return
 	}
 	b.PeerID = res.SystemID
+	if res.Version < b.ver {
+		b.ver = res.Version
+	}
 
 	if BoundNotify != nil {
 		BoundNotify(b.BindInfo)
@@ -232,7 +236,7 @@ func (b *Bind) Send(r PDU) (s StatusCode, a PDU, e error) {
 	msg := message{
 		id:       r.CommandID(),
 		seq:      b.nextSequence(),
-		body:     r.Marshal(),
+		body:     r.Marshal(b.ver),
 		callback: make(chan message)}
 	b.eventQ <- msg
 
