@@ -19,10 +19,8 @@ func init() {
 			log.Printf("[INFO] %s %s (seq=%d%s)", di, di, seq, stat)
 		} else if e := pdu.Unmarshal(body); e != nil {
 			log.Printf("[INFO] %s %s (seq=%d%s)\n| error: %s", di, id, seq, stat, e)
-		} else if s := pdu.String(); len(s) == 0 {
-			log.Printf("[INFO] %s %s (seq=%d%s)", di, id, seq, stat)
 		} else {
-			log.Printf("[INFO] %s %s (seq=%d%s)\n%s", di, id, seq, stat, s)
+			log.Printf("[INFO] %s %s (seq=%d%s)%s", di, id, seq, stat, pdu)
 		}
 	}
 

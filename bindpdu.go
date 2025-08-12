@@ -3,7 +3,6 @@ package smpp
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"strings"
 
 	"github.com/fkgi/teldata"
@@ -24,6 +23,7 @@ func (d *bindReq) CommandID() CommandID { return d.cmd }
 
 func (d *bindReq) String() string {
 	buf := new(strings.Builder)
+	fmt.Fprintln(buf)
 	fmt.Fprintln(buf, Indent, "system_id         :", d.SystemID)
 	fmt.Fprintln(buf, Indent, "passsword         :", d.Password)
 	fmt.Fprintln(buf, Indent, "system_type       :", d.SystemType)
@@ -40,25 +40,18 @@ func (d *bindReq) Marshal(byte) []byte {
 	writeCString([]byte(d.Password), w)
 	writeCString([]byte(d.SystemType), w)
 	w.WriteByte(d.Version)
-	w.WriteByte(byte(d.AddrTON))
-	w.WriteByte(byte(d.AddrNPI))
-	writeCString([]byte(d.AddrRange), w)
+	writeAddr(d.AddrTON, d.AddrNPI, d.AddrRange, w)
 	return w.Bytes()
 }
 
 func (d *bindReq) Unmarshal(data []byte) (e error) {
 	buf := bytes.NewBuffer(data)
-	var ton, npi byte
 	if d.SystemID, e = readCString(buf); e != nil {
 	} else if d.Password, e = readCString(buf); e != nil {
 	} else if d.SystemType, e = readCString(buf); e != nil {
 	} else if d.Version, e = buf.ReadByte(); e != nil {
-	} else if ton, e = buf.ReadByte(); e != nil {
-	} else if npi, e = buf.ReadByte(); e != nil {
 	} else {
-		d.AddrTON = teldata.NatureOfAddress(ton)
-		d.AddrNPI = teldata.NumberingPlan(npi)
-		d.AddrRange, e = readCString(buf)
+		d.AddrTON, d.AddrNPI, d.AddrRange, e = readAddr(buf)
 	}
 	return
 }
@@ -73,6 +66,7 @@ func (d *bindRes) CommandID() CommandID { return d.cmd }
 
 func (d *bindRes) String() string {
 	buf := new(strings.Builder)
+	fmt.Fprintln(buf)
 	fmt.Fprintln(buf, Indent, "system_id           :", d.SystemID)
 	fmt.Fprintln(buf, Indent, "sc_interface_version:", d.Version)
 	return buf.String()
@@ -82,7 +76,7 @@ func (d *bindRes) Marshal(v byte) []byte {
 	w := new(bytes.Buffer)
 	writeCString([]byte(d.SystemID), w)
 	if v >= 0x34 {
-		writeTLV(0x0210, []byte{d.Version}, w)
+		w.Write([]byte{0x02, 0x10, 0x00, 0x01, d.Version})
 	}
 	return w.Bytes()
 }
@@ -92,20 +86,12 @@ func (d *bindRes) Unmarshal(data []byte) (e error) {
 	if d.SystemID, e = readCString(buf); e != nil {
 		return
 	}
-	for {
-		t, v, e2 := readTLV(buf)
-		if e2 == io.EOF {
-			break
-		}
-		if e2 != nil {
-			e = e2
-			break
-		}
-
-		switch t {
-		case 0x0210:
-			d.Version = v[0]
-		}
+	p := OptionalParameters{}
+	if e = p.readFrom(buf); e != nil {
+		return
+	}
+	if v, ok := p[0x0210]; ok && len(v) == 1 {
+		d.Version = v[0]
 	}
 	return
 }

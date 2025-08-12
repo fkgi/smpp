@@ -3,36 +3,38 @@ package smpp
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"strings"
+
+	"github.com/fkgi/teldata"
 )
 
 type smPDU struct {
-	SvcType  string `json:"svc_type,omitempty"`
-	SrcTON   byte   `json:"src_ton,omitempty"`
-	SrcNPI   byte   `json:"src_npi,omitempty"`
-	SrcAddr  string `json:"src_addr,omitempty"`
-	DstTON   byte   `json:"dst_ton"`
-	DstNPI   byte   `json:"dst_npi"`
-	DstAddr  string `json:"dst_addr"`
-	EsmClass byte   `json:"esm_class"`
+	SvcType  string                  `json:"svc_type,omitempty"`
+	SrcTON   teldata.NatureOfAddress `json:"src_ton,omitempty"`
+	SrcNPI   teldata.NumberingPlan   `json:"src_npi,omitempty"`
+	SrcAddr  string                  `json:"src_addr,omitempty"`
+	DstTON   teldata.NatureOfAddress `json:"dst_ton"`
+	DstNPI   teldata.NumberingPlan   `json:"dst_npi"`
+	DstAddr  string                  `json:"dst_addr"`
+	EsmClass esmClass                `json:"esm_class"`
 
-	ProtocolId           byte   `json:"protocol_id"`
-	PriorityFlag         byte   `json:"priority_flag"`
-	ScheduleDeliveryTime string `json:"schedule_delivery_time,omitempty"`
-	ValidityPeriod       string `json:"validity_period,omitempty"`
-	RegisteredDelivery   byte   `json:"registered_delivery"`
-	ReplaceIfPresentFlag byte   `json:"replace_if_present_flag,omitempty"`
-	DataCoding           byte   `json:"data_coding"`
-	SmDefaultMsgId       byte   `json:"sm_default_sm_id,omitempty"`
+	ProtocolId           byte               `json:"protocol_id"`
+	PriorityFlag         byte               `json:"priority_flag"`
+	ScheduleDeliveryTime string             `json:"schedule_delivery_time,omitempty"`
+	ValidityPeriod       string             `json:"validity_period,omitempty"`
+	RegisteredDelivery   registeredDelivery `json:"registered_delivery"`
+	ReplaceIfPresentFlag bool               `json:"replace_if_present_flag,omitempty"`
+	DataCoding           byte               `json:"data_coding"`
+	SmDefaultMsgId       byte               `json:"sm_default_sm_id,omitempty"`
 	// SmLength            byte
 	ShortMessage OctetData `json:"short_message,omitempty"`
 
-	Param map[uint16]OctetData `json:"options,omitempty"`
+	Param OptionalParameters `json:"options,omitempty"`
 }
 
 func (d *smPDU) String() string {
 	buf := new(strings.Builder)
+	fmt.Fprintln(buf)
 	fmt.Fprintln(buf, Indent, "service_type           :", d.SvcType)
 	fmt.Fprintln(buf, Indent, "source_addr_ton        :", d.SrcTON)
 	fmt.Fprintln(buf, Indent, "source_addr_npi        :", d.SrcNPI)
@@ -55,38 +57,29 @@ func (d *smPDU) String() string {
 	} else {
 		fmt.Fprintln(buf, Indent, "short_message          :")
 	}
-	fmt.Fprint(buf, Indent, " optional_parameters:")
-	for t, v := range d.Param {
-		fmt.Fprintf(buf, "\n%s %s %#04x: 0x% x", Indent, Indent, t, v)
-	}
+	fmt.Fprint(buf, d.Param)
 	return buf.String()
 }
 
 func (d *smPDU) Marshal(v byte) []byte {
-	w := bytes.Buffer{}
-	writeCString([]byte(d.SvcType), &w)
-	w.WriteByte(d.SrcTON)
-	w.WriteByte(d.SrcNPI)
-	writeCString([]byte(d.SrcAddr), &w)
-	w.WriteByte(d.DstTON)
-	w.WriteByte(d.DstNPI)
-	writeCString([]byte(d.DstAddr), &w)
-	w.WriteByte(d.EsmClass)
+	w := new(bytes.Buffer)
+	writeCString([]byte(d.SvcType), w)
+	writeAddr(d.SrcTON, d.SrcNPI, d.SrcAddr, w)
+	writeAddr(d.DstTON, d.DstNPI, d.DstAddr, w)
+	d.EsmClass.writeTo(w)
 	w.WriteByte(d.ProtocolId)
 	w.WriteByte(d.PriorityFlag)
-	writeCString([]byte(d.ScheduleDeliveryTime), &w)
-	writeCString([]byte(d.ValidityPeriod), &w)
-	w.WriteByte(d.RegisteredDelivery)
-	w.WriteByte(d.ReplaceIfPresentFlag)
+	writeCString([]byte(d.ScheduleDeliveryTime), w)
+	writeCString([]byte(d.ValidityPeriod), w)
+	d.RegisteredDelivery.writeTo(w)
+	writeBool(d.ReplaceIfPresentFlag, w)
 	w.WriteByte(d.DataCoding)
 	w.WriteByte(d.SmDefaultMsgId)
 	// w.WriteByte(d.SmLength)
 	w.WriteByte(byte(len(d.ShortMessage)))
 	w.Write(d.ShortMessage)
 	if v >= 0x34 {
-		for k, v := range d.Param {
-			writeTLV(k, v, &w)
-		}
+		d.Param.writeTo(w)
 	}
 	return w.Bytes()
 }
@@ -95,19 +88,15 @@ func (d *smPDU) Unmarshal(data []byte) (e error) {
 	buf := bytes.NewBuffer(data)
 	var l byte
 	if d.SvcType, e = readCString(buf); e != nil {
-	} else if d.SrcTON, e = buf.ReadByte(); e != nil {
-	} else if d.SrcNPI, e = buf.ReadByte(); e != nil {
-	} else if d.SrcAddr, e = readCString(buf); e != nil {
-	} else if d.DstTON, e = buf.ReadByte(); e != nil {
-	} else if d.DstNPI, e = buf.ReadByte(); e != nil {
-	} else if d.DstAddr, e = readCString(buf); e != nil {
-	} else if d.EsmClass, e = buf.ReadByte(); e != nil {
+	} else if d.SrcTON, d.SrcNPI, d.SrcAddr, e = readAddr(buf); e != nil {
+	} else if d.DstTON, d.DstNPI, d.DstAddr, e = readAddr(buf); e != nil {
+	} else if e = d.EsmClass.readFrom(buf); e != nil {
 	} else if d.ProtocolId, e = buf.ReadByte(); e != nil {
 	} else if d.PriorityFlag, e = buf.ReadByte(); e != nil {
 	} else if d.ScheduleDeliveryTime, e = readCString(buf); e != nil {
 	} else if d.ValidityPeriod, e = readCString(buf); e != nil {
-	} else if d.RegisteredDelivery, e = buf.ReadByte(); e != nil {
-	} else if d.ReplaceIfPresentFlag, e = buf.ReadByte(); e != nil {
+	} else if e = d.RegisteredDelivery.readFrom(buf); e != nil {
+	} else if d.ReplaceIfPresentFlag, e = readBool(buf); e != nil {
 	} else if d.DataCoding, e = buf.ReadByte(); e != nil {
 	} else if d.SmDefaultMsgId, e = buf.ReadByte(); e != nil {
 	} else if l, e = buf.ReadByte(); e != nil {
@@ -117,18 +106,8 @@ func (d *smPDU) Unmarshal(data []byte) (e error) {
 	}
 
 	if e == nil {
-		d.Param = make(map[uint16]OctetData)
-		for {
-			t, v, e2 := readTLV(buf)
-			if e2 == io.EOF {
-				break
-			}
-			if e2 != nil {
-				e = e2
-				break
-			}
-			d.Param[t] = v
-		}
+		d.Param = OptionalParameters{}
+		e = d.Param.readFrom(buf)
 	}
 	return
 }
@@ -143,13 +122,15 @@ type SubmitSM_resp struct {
 	MessageID string `json:"id,omitempty"`
 }
 
-func (d *SubmitSM_resp) String() string     { return Indent + " id: " + d.MessageID }
+func (d *SubmitSM_resp) String() string {
+	return fmt.Sprint("\n", Indent, " id: ", d.MessageID)
+}
 func (*SubmitSM_resp) CommandID() CommandID { return SubmitSmResp }
 
 func (d *SubmitSM_resp) Marshal(byte) []byte {
-	w := bytes.Buffer{}
+	w := new(bytes.Buffer)
 	if len(d.MessageID) != 0 {
-		writeCString([]byte(d.MessageID), &w)
+		writeCString([]byte(d.MessageID), w)
 	}
 	return w.Bytes()
 }

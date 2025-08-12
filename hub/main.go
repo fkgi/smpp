@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -51,6 +52,7 @@ func main() {
 	tn := flag.Uint("o", 0, "Type of Number for ESME address")
 	np := flag.Uint("n", 0, "Numbering Plan Indicator for ESME address")
 	ar := flag.String("a", "", "UNIX Regular Expression notation of ESME address")
+	dict := flag.String("d", "dictionary.xml", "Diameter dictionary file `path`.")
 	help := flag.Bool("h", false, "Print usage")
 	verbose = flag.Bool("v", false, "Verbose log output")
 	flag.Parse()
@@ -65,6 +67,20 @@ func main() {
 		smpp.TraceMessage = nil
 	}
 	smpp.ID = *id
+
+	log.Println("[INFO]", "loading dictionary file", *dict)
+	if data, e := os.ReadFile(*dict); e != nil {
+		log.Fatalln("[ERROR]", "failed to open dictionary file:", e)
+	} else if dicData, e := dictionary.LoadDictionary(data); e != nil {
+		log.Fatalln("[ERROR]", "failed to read dictionary file:", e)
+	} else {
+		buf := new(strings.Builder)
+		fmt.Fprint(buf, "supported parameter:")
+		for _, p := range dicData.P {
+			fmt.Fprintf(buf, " %s(%s/%s),", p.N, p.I, p.T)
+		}
+		log.Println("[INFO]", buf)
+	}
 
 	if len(*lh) != 0 {
 		if a, e := net.ResolveTCPAddr("tcp", *lh); e != nil {

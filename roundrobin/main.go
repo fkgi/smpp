@@ -50,6 +50,7 @@ func main() {
 	ts := flag.Bool("t", false, "enable TLS")
 	cr := flag.String("c", "", "TLS crt file")
 	ky := flag.String("k", "", "TLS key file")
+	dict := flag.String("d", "dictionary.xml", "Diameter dictionary file `path`.")
 	help := flag.Bool("h", false, "Print usage")
 	verbose = flag.Bool("v", false, "Verbose log output")
 	flag.Parse()
@@ -61,6 +62,20 @@ func main() {
 
 	if !*verbose {
 		smpp.TraceMessage = nil
+	}
+
+	log.Println("[INFO]", "loading dictionary file", *dict)
+	if data, e := os.ReadFile(*dict); e != nil {
+		log.Fatalln("[ERROR]", "failed to open dictionary file:", e)
+	} else if dicData, e := dictionary.LoadDictionary(data); e != nil {
+		log.Fatalln("[ERROR]", "failed to read dictionary file:", e)
+	} else {
+		buf := new(strings.Builder)
+		fmt.Fprint(buf, "supported parameter:")
+		for _, p := range dicData.P {
+			fmt.Fprintf(buf, " %s(%s/%s),", p.N, p.I, p.T)
+		}
+		log.Println("[INFO]", buf)
 	}
 
 	addr := flag.Arg(0)
