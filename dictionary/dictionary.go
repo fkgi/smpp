@@ -131,8 +131,9 @@ func regIntegerFunc(id uint16, n string, l int) {
 		if !ok {
 			return id, nil, errors.New("data type mismatch")
 		}
+		i2 := uint64(i)
 		w := new(bytes.Buffer)
-		binary.Write(w, binary.BigEndian, i)
+		binary.Write(w, binary.BigEndian, i2)
 		b := w.Bytes()
 		return id, smpp.OctetData(b[len(b)-l:]), nil
 	}
@@ -141,7 +142,9 @@ func regIntegerFunc(id uint16, n string, l int) {
 			return n, 0, errors.New("data type mismatch")
 		}
 		var v uint64
-		e := binary.Read(bytes.NewBuffer(d), binary.BigEndian, &v)
+		e := binary.Read(
+			bytes.NewBuffer(append(make([]byte, 8-l), d...)),
+			binary.BigEndian, &v)
 		return n, v, e
 	}
 }
@@ -149,14 +152,18 @@ func regIntegerFunc(id uint16, n string, l int) {
 func init() {
 	smpp.DecodeParameter = func(i uint16, o smpp.OctetData) (string, any, error) {
 		if f, ok := decParams[i]; ok {
-			return f(o)
+			s, a, e := f(o)
+			fmt.Println(i, o, s, a, e)
+			return s, a, e
 		}
 		return "", nil, errors.New("unknown parameter")
 	}
 
 	smpp.EncodeParameter = func(s string, a any) (uint16, smpp.OctetData, error) {
 		if f, ok := encParams[s]; ok {
-			return f(a)
+			i, o, e := f(a)
+			fmt.Println(s, a, i, o, e)
+			return i, o, e
 		}
 		return 0, nil, errors.New("unknown parameter")
 	}

@@ -398,8 +398,10 @@ func (m *messagingMode) UnmarshalJSON(b []byte) (e error) {
 		*m = Forward
 	case "store_andF_frward":
 		*m = StoreAndForward
+	default:
+		e = errors.New("invalid Messaging Mode: " + s)
 	}
-	return errors.New("invalid Messaging Mode")
+	return
 }
 
 type messageType byte
@@ -453,8 +455,10 @@ func (m *messageType) UnmarshalJSON(b []byte) (e error) {
 		*m = ConversationAbort
 	case "intermadiate_delivery_notification":
 		*m = InterDeliveryNotif
+	default:
+		e = errors.New("invalid Messaging Type")
 	}
-	return errors.New("invalid Messaging Type")
+	return
 }
 
 type esmClass struct {
@@ -470,7 +474,7 @@ func (c esmClass) String() string {
 	fmt.Fprintln(buf, Indent, Indent, "message_mode   :", c.Mode)
 	fmt.Fprintln(buf, Indent, Indent, "message_type   :", c.Type)
 	fmt.Fprintln(buf, Indent, Indent, "udhi_indicator :", c.UDHI)
-	fmt.Fprintln(buf, Indent, Indent, "reply_path     :", c.ReplyPath)
+	fmt.Fprint(buf, Indent, " ", Indent, " reply_path     : ", c.ReplyPath)
 	return buf.String()
 }
 
@@ -532,8 +536,10 @@ func (r *deliveryReceipt) UnmarshalJSON(b []byte) (e error) {
 		*r = ReceiptOnAll
 	case "delivery_receipt_requested_on_failure":
 		*r = ReceiptOnError
+	default:
+		e = errors.New("invalid Delivery Receipt")
 	}
-	return errors.New("invalid Delivery Receipt")
+	return
 }
 
 type registeredDelivery struct {
@@ -549,7 +555,7 @@ func (r registeredDelivery) String() string {
 	fmt.Fprintln(buf, Indent, Indent, "delivery_receipt                  :", r.Receipt)
 	fmt.Fprintln(buf, Indent, Indent, "delivery_ack                      :", r.DeliveryAck)
 	fmt.Fprintln(buf, Indent, Indent, "manual/user_ack                   :", r.ManualUserAck)
-	fmt.Fprintln(buf, Indent, Indent, "intermadiate_delivery_notification:", r.IntermediateNotif)
+	fmt.Fprint(buf, Indent, " ", Indent, " intermadiate_delivery_notification: ", r.IntermediateNotif)
 	return buf.String()
 }
 

@@ -1,12 +1,12 @@
 <dictionary>
-<parameter name="dest_addr_subunit" id="0x0005" type="Enumerated">
+<parameter name="dest_addr_subunit" id="0005" type="Enumerated">
     <enum value="0">Unknown</enum>
     <enum value="1">MS Display</enum>
     <enum value="2">Mobile Equipment</enum>
     <enum value="3">Smart Card 1</enum>
     <enum value="4">External Unit 1</enum>
 </parameter>
-<parameter name="dest_network_type" id="0x0006" type="Enumerated">
+<parameter name="dest_network_type" id="0006" type="Enumerated">
     <enum value="0">Unknown</enum>
     <enum value="1">GSM</enum>
     <enum value="2">ANSI-136</enum>
@@ -17,7 +17,7 @@
     <enum value="7">AMPS</enum>
     <enum value="8">PagingNetwork</enum>
 </parameter>
-<parameter name="dest_bearer_type" id="0x0007" type="Enumerated">
+<parameter name="dest_bearer_type" id="0007" type="Enumerated">
     <enum value="0">Unknown</enum>
     <enum value="1">GSM</enum>
     <enum value="2">CircuitSwitchedData</enum>
@@ -28,15 +28,15 @@
     <enum value="7">FLEX/ReFLEX</enum>
     <enum value="8">CellBroadcast</enum>
 </parameter>
-<parameter name="dest_telematics_id" id="0x0008" type="Integet2" />
-<parameter name="source_addr_subunit" id="0x000D" type="Enumerated">
+<parameter name="dest_telematics_id" id="0008" type="Integet2" />
+<parameter name="source_addr_subunit" id="000D" type="Enumerated">
     <enum value="0">Unknown</enum>
     <enum value="1">MS Display</enum>
     <enum value="2">Mobile Equipment</enum>
     <enum value="3">Smart Card 1</enum>
     <enum value="4">External Unit 1</enum>
 </parameter>
-<parameter name="source_network_type" id="0x000E" type="Enumerated">
+<parameter name="source_network_type" id="000E" type="Enumerated">
     <enum value="0">Unknown</enum>
     <enum value="1">GSM</enum>
     <enum value="2">ANSI-136</enum>
@@ -47,7 +47,7 @@
     <enum value="7">AMPS</enum>
     <enum value="8">PagingNetwork</enum>
 </parameter>
-<parameter name="source_bearer_type" id="0x000F" type="Enumerated">
+<parameter name="source_bearer_type" id="000F" type="Enumerated">
     <enum value="0">Unknown</enum>
     <enum value="1">GSM</enum>
     <enum value="2">CircuitSwitchedData</enum>
@@ -58,104 +58,104 @@
     <enum value="7">FLEX/ReFLEX</enum>
     <enum value="8">CellBroadcast</enum>
 </parameter>
-<parameter name="source_telematics_id" id="0x0010" type="Integet2" />
-<parameter name="qos_time_to_live" id="0x0017" type="Integer4" />
-<parameter name="payload_type" id="0x0019" type="Enumerated">
-    <ennum value="0">Default</enum>
-    <ennum value="1">WCMP message</enum>
+<parameter name="source_telematics_id" id="0010" type="Integet2" />
+<parameter name="qos_time_to_live" id="0017" type="Integer4" />
+<parameter name="payload_type" id="0019" type="Enumerated">
+    <enum value="0">Default</enum>
+    <enum value="1">WCMP message</enum>
 </parameter>
-<parameter name="additional_status_info_text" id="0x001D" type="CString" />
-<parameter name="receipted_message_id" id="0x001E" type="CString" />
-<parameter name="ms_msg_wait_facilities" id="0x0030" type="Integer" />
-<parameter name="privacy_indicator" id="0x0201" type="Enumerated">
-    <ennum value="0">Not Restricted</enum>
-    <ennum value="1">Restricted</enum>
-    <ennum value="2">Confidential</enum>
-    <ennum value="3">Secret</enum>
+<parameter name="additional_status_info_text" id="001D" type="CString" />
+<parameter name="receipted_message_id" id="001E" type="CString" />
+<parameter name="ms_msg_wait_facilities" id="0030" type="Integer" />
+<parameter name="privacy_indicator" id="0201" type="Enumerated">
+    <enum value="0">Not Restricted</enum>
+    <enum value="1">Restricted</enum>
+    <enum value="2">Confidential</enum>
+    <enum value="3">Secret</enum>
 </parameter>
-<parameter name="source_subaddress" id="0x0202" type="OctetString" />
-<parameter name="dest_subaddress" id="0x0203" type="OctetString" />
-<parameter name="user_message_reference" id="0x0204" type="Integer2" />
-<parameter name="user_response_code" id="0x0205" type="Integer" />
-<parameter name="source_port" id="0x020A" type="Integer2" />
-<parameter name="destination_port" id="0x020B" type="Integer2" />
-<parameter name="sar_msg_ref_num" id="0x020C" type="Integer2" />
-<parameter name="language_indicator" id="0x020D" type="Enumerated">
-    <ennum value="0">unspecified</enum>
-    <ennum value="1">english</enum>
-    <ennum value="2">french</enum>
-    <ennum value="3">spanish</enum>
-    <ennum value="4">german</enum>
-    <ennum value="5">portuguese</enum>
+<parameter name="source_subaddress" id="0202" type="OctetString" />
+<parameter name="dest_subaddress" id="0203" type="OctetString" />
+<parameter name="user_message_reference" id="0204" type="Integer2" />
+<parameter name="user_response_code" id="0205" type="Integer" />
+<parameter name="source_port" id="020A" type="Integer2" />
+<parameter name="destination_port" id="020B" type="Integer2" />
+<parameter name="sar_msg_ref_num" id="020C" type="Integer2" />
+<parameter name="language_indicator" id="020D" type="Enumerated">
+    <enum value="0">unspecified</enum>
+    <enum value="1">english</enum>
+    <enum value="2">french</enum>
+    <enum value="3">spanish</enum>
+    <enum value="4">german</enum>
+    <enum value="5">portuguese</enum>
 </parameter>
-<parameter name="sar_total_segments" id="0x020E" type="Integer" />
-<parameter name="sar_segment_seqnum" id="0x020F" type="Integer" />
-<parameter name="SC_interface_version" id="0x0210" type="Integer" />
-<parameter name="callback_num_pres_ind" id="0x0302" type="Integer" />
-<parameter name="callback_num_atag" id="0x0303" type="OctetString" />
-<parameter name="number_of_messages" id="0x0304" type="Integer" />
-<parameter name="callback_num" id="0x0381" type="OctetString" />
-<parameter name="dpf_result" id="0x0420" type="Enumerated">
-    <ennum value="0">DPF not set</enum>
-    <ennum value="1">DPF set</enum>
+<parameter name="sar_total_segments" id="020E" type="Integer" />
+<parameter name="sar_segment_seqnum" id="020F" type="Integer" />
+<parameter name="SC_interface_version" id="0210" type="Integer" />
+<parameter name="callback_num_pres_ind" id="0302" type="Integer" />
+<parameter name="callback_num_atag" id="0303" type="OctetString" />
+<parameter name="number_of_messages" id="0304" type="Integer" />
+<parameter name="callback_num" id="0381" type="OctetString" />
+<parameter name="dpf_result" id="0420" type="Enumerated">
+    <enum value="0">DPF not set</enum>
+    <enum value="1">DPF set</enum>
 </parameter>
-<parameter name="set_dpf" id="0x0421" type="Enumerated">
-    <ennum value="0">setting of DPF for delivery failure not requested</enum>
-    <ennum value="1">setting of DPF for delivery failure requeste</enum>
+<parameter name="set_dpf" id="0421" type="Enumerated">
+    <enum value="0">setting of DPF for delivery failure not requested</enum>
+    <enum value="1">setting of DPF for delivery failure requeste</enum>
 </parameter>
-<parameter name="ms_availability_status" id="0x0422" type="Enumerated">
-    <ennum value="0">available</enum>
-    <ennum value="1">denied</enum>
-    <ennum value="2">unavailable</enum>
+<parameter name="ms_availability_status" id="0422" type="Enumerated">
+    <enum value="0">available</enum>
+    <enum value="1">denied</enum>
+    <enum value="2">unavailable</enum>
 </parameter>
-<parameter name="network_error_code" id="0x0423" type="OctetString" />
-<parameter name="message_payload" id="0x0424" type="OctetString" />
-<parameter name="delivery_failure_reason" id="0x0425" type="Enumerated">
-    <ennum value="0">destination unavailable</enum>
-    <ennum value="1">destination address invalid</enum>
-    <ennum value="2">permanent network error</enum>
-    <ennum value="3">temporary network error</enum>
+<parameter name="network_error_code" id="0423" type="OctetString" />
+<parameter name="message_payload" id="0424" type="OctetString" />
+<parameter name="delivery_failure_reason" id="0425" type="Enumerated">
+    <enum value="0">destination unavailable</enum>
+    <enum value="1">destination address invalid</enum>
+    <enum value="2">permanent network error</enum>
+    <enum value="3">temporary network error</enum>
 </parameter>
-<parameter name="more_messages_to_send" id="0x0426" type="Enumerated">
-    <ennum value="0">no more message to follow</enum>
-    <ennum value="1">more message to follow</enum>
+<parameter name="more_messages_to_send" id="0426" type="Enumerated">
+    <enum value="0">no more message to follow</enum>
+    <enum value="1">more message to follow</enum>
 </parameter>
-<parameter name="message_state" id="0x0427" type="Enumerated">
-    <ennum value="1">enroute</enum>
-    <ennum value="2">delivered</enum>
-    <ennum value="3">expired</enum>
-    <ennum value="4">deleted</enum>
-    <ennum value="5">undeliverable</enum>
-    <ennum value="6">accepted</enum>
-    <ennum value="7">unknown</enum>
-    <ennum value="8">rejected</enum>
+<parameter name="message_state" id="0427" type="Enumerated">
+    <enum value="1">enroute</enum>
+    <enum value="2">delivered</enum>
+    <enum value="3">expired</enum>
+    <enum value="4">deleted</enum>
+    <enum value="5">undeliverable</enum>
+    <enum value="6">accepted</enum>
+    <enum value="7">unknown</enum>
+    <enum value="8">rejected</enum>
 </parameter>
-<parameter name="ussd_service_op" id="0x0501" type="OctetString" />
-<parameter name="display_time" id="0x1201" type="Enumerated">
-    <ennum value="0">temporary</enum>
-    <ennum value="1">default</enum>
-    <ennum value="2">invoke</enum>
+<parameter name="ussd_service_op" id="0501" type="OctetString" />
+<parameter name="display_time" id="1201" type="Enumerated">
+    <enum value="0">temporary</enum>
+    <enum value="1">default</enum>
+    <enum value="2">invoke</enum>
 </parameter>
-<parameter name="sms_signal" id="0x1203" type="Integer2" />
-<parameter name="ms_validity" id="0x1204" type="Enumerated">
-    <ennum value="0">store indefinitely</enum>
-    <ennum value="1">power down</enum>
-    <ennum value="2">SID based registration area</enum>
-    <ennum value="3">display only</enum>
+<parameter name="sms_signal" id="1203" type="Integer2" />
+<parameter name="ms_validity" id="1204" type="Enumerated">
+    <enum value="0">store indefinitely</enum>
+    <enum value="1">power down</enum>
+    <enum value="2">SID based registration area</enum>
+    <enum value="3">display only</enum>
 </parameter>
-<parameter name="alert_on_message_delivery" id="0x130C" type="Null" />
-<parameter name="its_reply_type" id="0x1380" type="Enumerated">
-    <ennum value="0">digit</enum>
-    <ennum value="1">number</enum>
-    <ennum value="2">telephone no</enum>
-    <ennum value="3">password</enum>
-    <ennum value="4">character line</enum>
-    <ennum value="5">menu</enum>
-    <ennum value="6">date</enum>
-    <ennum value="7">time</enum>
-    <ennum value="8">continue</enum>
+<parameter name="alert_on_message_delivery" id="130C" type="Null" />
+<parameter name="its_reply_type" id="1380" type="Enumerated">
+    <enum value="0">digit</enum>
+    <enum value="1">number</enum>
+    <enum value="2">telephone no</enum>
+    <enum value="3">password</enum>
+    <enum value="4">character line</enum>
+    <enum value="5">menu</enum>
+    <enum value="6">date</enum>
+    <enum value="7">time</enum>
+    <enum value="8">continue</enum>
 </parameter>
-<parameter name="its_session_info" id="0x1383" type="OctetString" />
+<parameter name="its_session_info" id="1383" type="OctetString" />
     <!-- CString OctetString Enumerated Null -->
 </dictionary>
 

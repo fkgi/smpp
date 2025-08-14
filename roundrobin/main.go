@@ -41,7 +41,7 @@ func main() {
 	id := flag.String("s", smpp.ID, "System ID")
 	lh := flag.String("i", ":8080", "HTTP local address")
 	ph := flag.String("b", "", "HTTP backend address")
-	bindType = flag.String("d", "svr", "Bind type of client [tx/rx/trx] or server [svr]")
+	bindType = flag.String("x", "svr", "Bind type of client [tx/rx/trx] or server [svr]")
 	pw := flag.String("p", "", "Password for ESME authentication")
 	st := flag.String("y", "DEBUGGER", "Type of ESME system")
 	tn := flag.Uint("o", 0, "Type of Number for ESME address")

@@ -38,7 +38,7 @@ func (a *destAddrs) Set(v string) error {
 
 func main() {
 	var dst destAddrs
-	flag.Var(&dst, "d", "SMPP destination address and port")
+	flag.Var(&dst, "r", "SMPP destination address and port")
 	src := flag.String("l", "", "SMPP local address and port")
 	var e error
 	if smpp.ID, e = os.Hostname(); e != nil {

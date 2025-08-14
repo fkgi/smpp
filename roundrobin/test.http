@@ -26,21 +26,35 @@ content-type: application/json
 
 {
     "svc_type": "svc1",
-    "src_ton": 0,
-    "src_npi": 9,
+    "src_ton": "unknown",
+    "src_npi": "private",
     "src_addr": "123",
-    "dst_ton": 1,
-    "dst_npi": 1,
+    "dst_ton": "international",
+    "dst_npi": "telephony",
     "dst_addr": "819099990001",
-    "esm_class": 0,
+    "esm_class": {
+        "message_mode": "default_SMSC",
+        "message_type": "default_msg",
+        "udhi_indicator": false,
+        "reply_path": false
+    },
     "protocol_id": 0,
     "priority_flag": 0,
-    "registered_delivery": 0,
-    "replace_if_present_flag": 0,
+    "registered_delivery": {
+        "delivery_receipt":"no_delivery_receipt_requested",
+        "delivery_ack":false,
+        "manual/user_ack":false,
+        "intermadiate_delivery_notification":false
+    },
+    "replace_if_present_flag": false,
     "data_coding": 8,
     "sm_default_sm_id": 0,
     "short_message": "01400b819010325476f800080a3042304430463048304a",
-    "options": {}
+    "options": {
+        "sar_total_segments": 3,
+        "sar_segment_seqnum": 1,
+        "sar_msg_ref_num": 99
+    }
 }
 
 ###
