@@ -53,6 +53,7 @@ func main() {
 	np := flag.Uint("n", 0, "Numbering Plan Indicator for ESME address")
 	ar := flag.String("a", "", "UNIX Regular Expression notation of ESME address")
 	dict := flag.String("d", "dictionary.xml", "Diameter dictionary file `path`.")
+	gsm := flag.Bool("g", false, "Set SMSC default alphabet to GSM 7bit")
 	help := flag.Bool("h", false, "Print usage")
 	verbose = flag.Bool("v", false, "Verbose log output")
 	flag.Parse()
@@ -81,6 +82,8 @@ func main() {
 		}
 		log.Println("[INFO]", buf)
 	}
+
+	smpp.DefaultAlphabetIsGSM = *gsm
 
 	if len(*lh) != 0 {
 		if a, e := net.ResolveTCPAddr("tcp", *lh); e != nil {

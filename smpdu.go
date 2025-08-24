@@ -104,9 +104,8 @@ func (d *smPDU) Unmarshal(data []byte) (e error) {
 	} else if d.SmDefaultMsgId, e = buf.ReadByte(); e != nil {
 	} else if l, e = buf.ReadByte(); e == nil {
 		ud := make([]byte, int(l))
-		if _, e = buf.Read(ud); e != nil {
-		} else if e = d.ShortMessage.unmarshal(ud, d.DataCoding, d.EsmClass.UDHI); e != nil {
-		} else {
+		if _, e = buf.Read(ud); e == nil {
+			d.ShortMessage.unmarshal(ud, d.DataCoding, d.EsmClass.UDHI)
 			d.Param = OptionalParameters{}
 			e = d.Param.readFrom(buf)
 		}
@@ -153,7 +152,7 @@ func (m *messagingMode) UnmarshalJSON(b []byte) (e error) {
 		*m = Datagram
 	case "forward":
 		*m = Forward
-	case "store_andF_frward":
+	case "store_and_frward":
 		*m = StoreAndForward
 	default:
 		e = errors.New("invalid Messaging Mode: " + s)
@@ -221,7 +220,7 @@ func (m *messageType) UnmarshalJSON(b []byte) (e error) {
 type esmClass struct {
 	Mode      messagingMode `json:"message_mode"`
 	Type      messageType   `json:"message_type"`
-	UDHI      bool          `json:"udhi_indicator"`
+	UDHI      bool          `json:"udh_indicator"`
 	ReplyPath bool          `json:"reply_path"`
 }
 
@@ -230,7 +229,7 @@ func (c esmClass) String() string {
 	fmt.Fprintln(buf)
 	fmt.Fprintln(buf, Indent, Indent, "message_mode   :", c.Mode)
 	fmt.Fprintln(buf, Indent, Indent, "message_type   :", c.Type)
-	fmt.Fprintln(buf, Indent, Indent, "udhi_indicator :", c.UDHI)
+	fmt.Fprintln(buf, Indent, Indent, "udh_indicator :", c.UDHI)
 	fmt.Fprint(buf, Indent, " ", Indent, " reply_path     : ", c.ReplyPath)
 	return buf.String()
 }

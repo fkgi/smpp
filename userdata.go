@@ -9,6 +9,8 @@ import (
 	"github.com/fkgi/sms"
 )
 
+var DefaultAlphabetIsGSM bool
+
 type UserData struct {
 	Text string        `json:"text,omitempty"`
 	UDH  []UserDataHdr `json:"hdr,omitempty"`
@@ -42,9 +44,12 @@ func (u UserData) Get8bitData() ([]byte, error) {
 	return base64.StdEncoding.DecodeString(u.Text)
 }
 
-func (u *UserData) unmarshal(ud []byte, dc byte, h bool) error {
+func (u *UserData) unmarshal(ud []byte, dc byte, h bool) {
 	o := 0
 	l := len(ud)
+	if l == 0 {
+		return
+	}
 	if h {
 		o = int(ud[0]+1) * 8
 		l -= o / 7
@@ -68,10 +73,20 @@ func (u *UserData) unmarshal(ud []byte, dc byte, h bool) error {
 		ud = ud[ud[0]+1:]
 	}
 
+	if dc == 0x00 && !DefaultAlphabetIsGSM {
+		dc = 0x03
+	} else if 0xe0&dc == 0xc0 {
+		dc = 0x00
+	} else if 0xf4&dc == 0xf0 {
+		dc = 0x00
+	}
+
 	switch dc {
 	case 0x00:
 		s := sms.UnmarshalGSM7bitString(o, l, ud)
 		u.Text = s.String()
+	case 0x03:
+		u.Text = string(ud)
 	case 0x08:
 		s := make([]uint16, len(ud)/2)
 		for i := range s {
@@ -81,7 +96,6 @@ func (u *UserData) unmarshal(ud []byte, dc byte, h bool) error {
 	default:
 		u.Text = base64.StdEncoding.EncodeToString(ud)
 	}
-	return nil
 }
 
 func (u UserData) marshal(dc byte) []byte {
@@ -99,6 +113,14 @@ func (u UserData) marshal(dc byte) []byte {
 		w.Write(d)
 	}
 
+	if dc == 0x00 && !DefaultAlphabetIsGSM {
+		dc = 0x03
+	} else if 0xe0&dc == 0xc0 {
+		dc = 0x00
+	} else if 0xf4&dc == 0xf0 {
+		dc = 0x00
+	}
+
 	switch dc {
 	case 0x00:
 		o := (len(d) * 8) % 7
@@ -107,6 +129,8 @@ func (u UserData) marshal(dc byte) []byte {
 		}
 		s, _ := sms.StringToGSM7bit(u.Text)
 		w.Write(s.Marshal(o))
+	case 0x03:
+		w.Write([]byte(u.Text))
 	case 0x08:
 		u := utf16.Encode([]rune(u.Text))
 		ud := make([]byte, len(u)*2)
