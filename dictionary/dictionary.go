@@ -1,9 +1,6 @@
 package dictionary
 
 import (
-	"bytes"
-	"encoding/binary"
-	"encoding/hex"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -25,8 +22,8 @@ type XDictionary struct {
 }
 
 var (
-	encParams = make(map[string]func(any) (uint16, smpp.OctetData, error))
-	decParams = make(map[uint16]func(smpp.OctetData) (string, any, error))
+	encParams = make(map[string]func(any) (uint16, []byte, error))
+	decParams = make(map[uint16]func([]byte) (string, any, error))
 )
 
 func LoadDictionary(data []byte) (xd XDictionary, e error) {
@@ -34,16 +31,8 @@ func LoadDictionary(data []byte) (xd XDictionary, e error) {
 		return xd, e
 	}
 	for _, p := range xd.P {
-		var i []byte
-		if i, e = hex.DecodeString(p.I); e != nil {
-			e = fmt.Errorf("invalid id of parameter: %s", e)
-			return
-		} else if len(i) != 2 {
-			e = fmt.Errorf("invalid size of id")
-			return
-		}
 		var id uint16
-		if e = binary.Read(bytes.NewBuffer(i), binary.BigEndian, &id); e != nil {
+		if id, e = smpp.IdFromHexString(p.I); e != nil {
 			return
 		}
 		n := p.N
@@ -58,29 +47,29 @@ func LoadDictionary(data []byte) (xd XDictionary, e error) {
 		case "Integer4":
 			regIntegerFunc(id, p.N, 4)
 		case "CString":
-			encParams[p.N] = func(v any) (uint16, smpp.OctetData, error) {
+			encParams[p.N] = func(v any) (uint16, []byte, error) {
 				i, ok := v.(string)
 				if !ok {
 					return id, nil, errors.New("data type mismatch")
 				}
 				return id, append([]byte(i), 0x00), nil
 			}
-			decParams[id] = func(d smpp.OctetData) (string, any, error) {
+			decParams[id] = func(d []byte) (string, any, error) {
 				if len(d) == 0 {
 					return n, "", errors.New("data type mismatch")
 				}
 				return n, string(d[:len(d)-1]), nil
 			}
 		case "OctetString":
-			encParams[p.N] = func(v any) (uint16, smpp.OctetData, error) {
+			encParams[p.N] = func(v any) (uint16, []byte, error) {
 				i, ok := v.([]byte)
 				if !ok {
 					return id, nil, errors.New("data type mismatch")
 				}
-				return id, smpp.OctetData(i), nil
+				return id, i, nil
 			}
-			decParams[id] = func(d smpp.OctetData) (string, any, error) {
-				return n, []byte(d), nil
+			decParams[id] = func(d []byte) (string, any, error) {
+				return n, d, nil
 			}
 		case "Enumerated":
 			encEnum := map[string]byte{}
@@ -89,7 +78,7 @@ func LoadDictionary(data []byte) (xd XDictionary, e error) {
 				encEnum[v.V] = v.I
 				decEnum[v.I] = v.V
 			}
-			encParams[p.N] = func(v any) (uint16, smpp.OctetData, error) {
+			encParams[p.N] = func(v any) (uint16, []byte, error) {
 				i, ok := v.(string)
 				if !ok {
 					return id, nil, errors.New("data type mismatch")
@@ -98,9 +87,9 @@ func LoadDictionary(data []byte) (xd XDictionary, e error) {
 				if !ok {
 					return id, nil, errors.New("invalid enum data")
 				}
-				return id, smpp.OctetData{b}, nil
+				return id, []byte{b}, nil
 			}
-			decParams[id] = func(d smpp.OctetData) (string, any, error) {
+			decParams[id] = func(d []byte) (string, any, error) {
 				if len(d) != 1 {
 					return n, 0, errors.New("data type mismatch")
 				}
@@ -111,10 +100,10 @@ func LoadDictionary(data []byte) (xd XDictionary, e error) {
 				return n, v, nil
 			}
 		case "Null":
-			encParams[p.N] = func(v any) (uint16, smpp.OctetData, error) {
-				return id, smpp.OctetData{}, nil
+			encParams[p.N] = func(v any) (uint16, []byte, error) {
+				return id, []byte{}, nil
 			}
-			decParams[id] = func(d smpp.OctetData) (string, any, error) {
+			decParams[id] = func(d []byte) (string, any, error) {
 				if len(d) != 0 {
 					return n, nil, errors.New("data type mismatch")
 				}
@@ -126,31 +115,33 @@ func LoadDictionary(data []byte) (xd XDictionary, e error) {
 }
 
 func regIntegerFunc(id uint16, n string, l int) {
-	encParams[n] = func(v any) (uint16, smpp.OctetData, error) {
-		i, ok := v.(float64)
-		if !ok {
+	encParams[n] = func(v any) (uint16, []byte, error) {
+		var u uint64
+		if f, ok := v.(float64); !ok {
 			return id, nil, errors.New("data type mismatch")
+		} else {
+			u = uint64(f)
 		}
-		i2 := uint64(i)
-		w := new(bytes.Buffer)
-		binary.Write(w, binary.BigEndian, i2)
-		b := w.Bytes()
-		return id, smpp.OctetData(b[len(b)-l:]), nil
+		d := make([]byte, l)
+		for i := range d {
+			d[i] = byte(u >> (8 * (l - i - 1)))
+		}
+		return id, smpp.OctetData(d), nil
 	}
-	decParams[id] = func(d smpp.OctetData) (string, any, error) {
+	decParams[id] = func(d []byte) (string, any, error) {
 		if len(d) != l {
 			return n, 0, errors.New("data type mismatch")
 		}
-		var v uint64
-		e := binary.Read(
-			bytes.NewBuffer(append(make([]byte, 8-l), d...)),
-			binary.BigEndian, &v)
-		return n, v, e
+		var v uint64 = 0
+		for _, b := range d {
+			v = (v << 8) | uint64(b)
+		}
+		return n, v, nil
 	}
 }
 
 func init() {
-	smpp.DecodeParameter = func(i uint16, o smpp.OctetData) (string, any, error) {
+	smpp.DecodeParameter = func(i uint16, o []byte) (string, any, error) {
 		if f, ok := decParams[i]; ok {
 			s, a, e := f(o)
 			fmt.Println(i, o, s, a, e)
@@ -159,7 +150,7 @@ func init() {
 		return "", nil, errors.New("unknown parameter")
 	}
 
-	smpp.EncodeParameter = func(s string, a any) (uint16, smpp.OctetData, error) {
+	smpp.EncodeParameter = func(s string, a any) (uint16, []byte, error) {
 		if f, ok := encParams[s]; ok {
 			i, o, e := f(a)
 			fmt.Println(s, a, i, o, e)

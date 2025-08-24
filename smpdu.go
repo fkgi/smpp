@@ -2,6 +2,8 @@ package smpp
 
 import (
 	"bytes"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -27,7 +29,7 @@ type smPDU struct {
 	DataCoding           byte               `json:"data_coding"`
 	SmDefaultMsgId       byte               `json:"sm_default_sm_id,omitempty"`
 	// SmLength            byte
-	ShortMessage OctetData `json:"short_message,omitempty"`
+	ShortMessage UserData `json:"short_message,omitempty"`
 
 	Param OptionalParameters `json:"options,omitempty"`
 }
@@ -51,12 +53,8 @@ func (d *smPDU) String() string {
 	fmt.Fprintln(buf, Indent, "replace_if_present_flag:", d.ReplaceIfPresentFlag)
 	fmt.Fprintln(buf, Indent, "data_coding            :", d.DataCoding)
 	fmt.Fprintln(buf, Indent, "sm_default_msg_id      :", d.SmDefaultMsgId)
-	fmt.Fprintln(buf, Indent, "sm_length              :", len(d.ShortMessage))
-	if len(d.ShortMessage) != 0 {
-		fmt.Fprintf(buf, "%s short_message          :0x% x\n", Indent, d.ShortMessage)
-	} else {
-		fmt.Fprintln(buf, Indent, "short_message          :")
-	}
+	// fmt.Fprintln(buf, Indent, "sm_length              :", len(d.ShortMessage))
+	fmt.Fprintln(buf, Indent, "short_message          :", d.ShortMessage)
 	fmt.Fprint(buf, d.Param)
 	return buf.String()
 }
@@ -66,6 +64,9 @@ func (d *smPDU) Marshal(v byte) []byte {
 	writeCString([]byte(d.SvcType), w)
 	writeAddr(d.SrcTON, d.SrcNPI, d.SrcAddr, w)
 	writeAddr(d.DstTON, d.DstNPI, d.DstAddr, w)
+	if len(d.ShortMessage.UDH) != 0 {
+		d.EsmClass.UDHI = true
+	}
 	d.EsmClass.writeTo(w)
 	w.WriteByte(d.ProtocolId)
 	w.WriteByte(d.PriorityFlag)
@@ -75,9 +76,11 @@ func (d *smPDU) Marshal(v byte) []byte {
 	writeBool(d.ReplaceIfPresentFlag, w)
 	w.WriteByte(d.DataCoding)
 	w.WriteByte(d.SmDefaultMsgId)
-	// w.WriteByte(d.SmLength)
-	w.WriteByte(byte(len(d.ShortMessage)))
-	w.Write(d.ShortMessage)
+
+	ud := d.ShortMessage.marshal(d.DataCoding)
+	w.WriteByte(byte(len(ud)))
+	w.Write(ud)
+
 	if v >= 0x34 {
 		d.Param.writeTo(w)
 	}
@@ -99,17 +102,243 @@ func (d *smPDU) Unmarshal(data []byte) (e error) {
 	} else if d.ReplaceIfPresentFlag, e = readBool(buf); e != nil {
 	} else if d.DataCoding, e = buf.ReadByte(); e != nil {
 	} else if d.SmDefaultMsgId, e = buf.ReadByte(); e != nil {
-	} else if l, e = buf.ReadByte(); e != nil {
-	} else {
-		d.ShortMessage = make([]byte, int(l))
-		_, e = buf.Read(d.ShortMessage)
-	}
-
-	if e == nil {
-		d.Param = OptionalParameters{}
-		e = d.Param.readFrom(buf)
+	} else if l, e = buf.ReadByte(); e == nil {
+		ud := make([]byte, int(l))
+		if _, e = buf.Read(ud); e != nil {
+		} else if e = d.ShortMessage.unmarshal(ud, d.DataCoding, d.EsmClass.UDHI); e != nil {
+		} else {
+			d.Param = OptionalParameters{}
+			e = d.Param.readFrom(buf)
+		}
 	}
 	return
+}
+
+type messagingMode byte
+
+const (
+	DefaultSMSC     messagingMode = 0x00
+	Datagram        messagingMode = 0x01
+	Forward         messagingMode = 0x02
+	StoreAndForward messagingMode = 0x03
+)
+
+func (m messagingMode) String() string {
+	switch m {
+	case DefaultSMSC:
+		return "default_SMSC"
+	case Datagram:
+		return "datagram"
+	case Forward:
+		return "forward"
+	case StoreAndForward:
+		return "store_and_forward"
+	}
+	return "unknown"
+}
+
+func (m messagingMode) MarshalJSON() ([]byte, error) {
+	return json.Marshal(m.String())
+}
+
+func (m *messagingMode) UnmarshalJSON(b []byte) (e error) {
+	s := ""
+	if e = json.Unmarshal(b, &s); e != nil {
+		return
+	}
+	switch s {
+	case "default_SMSC":
+		*m = DefaultSMSC
+	case "datagram":
+		*m = Datagram
+	case "forward":
+		*m = Forward
+	case "store_andF_frward":
+		*m = StoreAndForward
+	default:
+		e = errors.New("invalid Messaging Mode: " + s)
+	}
+	return
+}
+
+type messageType byte
+
+const (
+	DefaultMsg         messageType = 0x00
+	DeliveryReceipt    messageType = 0x04
+	DeliveryAck        messageType = 0x08
+	ManualUserAck      messageType = 0x10
+	ConversationAbort  messageType = 0x18
+	InterDeliveryNotif messageType = 0x20
+)
+
+func (m messageType) String() string {
+	switch m {
+	case DefaultMsg:
+		return "default_msg"
+	case DeliveryReceipt:
+		return "delivery_receipt"
+	case DeliveryAck:
+		return "delivery_ack"
+	case ManualUserAck:
+		return "manual/user_ack"
+	case ConversationAbort:
+		return "conversation_abort"
+	case InterDeliveryNotif:
+		return "intermadiate_delivery_notification"
+	}
+	return "unknown"
+}
+
+func (m messageType) MarshalJSON() ([]byte, error) {
+	return json.Marshal(m.String())
+}
+
+func (m *messageType) UnmarshalJSON(b []byte) (e error) {
+	s := ""
+	if e = json.Unmarshal(b, &s); e != nil {
+		return
+	}
+	switch s {
+	case "default_msg":
+		*m = DefaultMsg
+	case "delivery_receipt":
+		*m = DeliveryReceipt
+	case "delivery_ack":
+		*m = DeliveryAck
+	case "manual/user_ack":
+		*m = ManualUserAck
+	case "conversation_abort":
+		*m = ConversationAbort
+	case "intermadiate_delivery_notification":
+		*m = InterDeliveryNotif
+	default:
+		e = errors.New("invalid Messaging Type")
+	}
+	return
+}
+
+type esmClass struct {
+	Mode      messagingMode `json:"message_mode"`
+	Type      messageType   `json:"message_type"`
+	UDHI      bool          `json:"udhi_indicator"`
+	ReplyPath bool          `json:"reply_path"`
+}
+
+func (c esmClass) String() string {
+	buf := new(strings.Builder)
+	fmt.Fprintln(buf)
+	fmt.Fprintln(buf, Indent, Indent, "message_mode   :", c.Mode)
+	fmt.Fprintln(buf, Indent, Indent, "message_type   :", c.Type)
+	fmt.Fprintln(buf, Indent, Indent, "udhi_indicator :", c.UDHI)
+	fmt.Fprint(buf, Indent, " ", Indent, " reply_path     : ", c.ReplyPath)
+	return buf.String()
+}
+
+func (c esmClass) writeTo(buf *bytes.Buffer) {
+	b := byte(c.Mode) | byte(c.Type)
+	if c.UDHI {
+		b |= 0x40
+	}
+	if c.ReplyPath {
+		b |= 0x80
+	}
+	buf.WriteByte(b)
+}
+
+func (c *esmClass) readFrom(buf *bytes.Buffer) error {
+	b, e := buf.ReadByte()
+	if e == nil {
+		c.Mode = messagingMode(b & 0x03)
+		c.Type = messageType(b & 0x3c)
+		c.UDHI = b&0x40 == 0x40
+		c.ReplyPath = b&0x80 == 0x80
+	}
+	return e
+}
+
+type deliveryReceipt byte
+
+const (
+	NoReceipt      deliveryReceipt = 0x00
+	ReceiptOnAll   deliveryReceipt = 0x01
+	ReceiptOnError deliveryReceipt = 0x02
+)
+
+func (r deliveryReceipt) String() string {
+	switch r {
+	case NoReceipt:
+		return "no_delivery_receipt_requested"
+	case ReceiptOnAll:
+		return "delivery_receipt_requested_on_success_or_failure"
+	case ReceiptOnError:
+		return "delivery_receipt_requested_on_failure"
+	}
+	return "unknown"
+}
+
+func (r deliveryReceipt) MarshalJSON() ([]byte, error) {
+	return json.Marshal(r.String())
+}
+
+func (r *deliveryReceipt) UnmarshalJSON(b []byte) (e error) {
+	s := ""
+	if e = json.Unmarshal(b, &s); e != nil {
+		return
+	}
+	switch s {
+	case "no_delivery_receipt_requested":
+		*r = NoReceipt
+	case "delivery_receipt_requested_on_success_or_failure":
+		*r = ReceiptOnAll
+	case "delivery_receipt_requested_on_failure":
+		*r = ReceiptOnError
+	default:
+		e = errors.New("invalid Delivery Receipt")
+	}
+	return
+}
+
+type registeredDelivery struct {
+	Receipt           deliveryReceipt `json:"delivery_receipt"`
+	DeliveryAck       bool            `json:"delivery_ack"`
+	ManualUserAck     bool            `json:"manual/user_ack"`
+	IntermediateNotif bool            `json:"intermadiate_delivery_notification"`
+}
+
+func (r registeredDelivery) String() string {
+	buf := new(strings.Builder)
+	fmt.Fprintln(buf)
+	fmt.Fprintln(buf, Indent, Indent, "delivery_receipt                  :", r.Receipt)
+	fmt.Fprintln(buf, Indent, Indent, "delivery_ack                      :", r.DeliveryAck)
+	fmt.Fprintln(buf, Indent, Indent, "manual/user_ack                   :", r.ManualUserAck)
+	fmt.Fprint(buf, Indent, " ", Indent, " intermadiate_delivery_notification: ", r.IntermediateNotif)
+	return buf.String()
+}
+
+func (r registeredDelivery) writeTo(buf *bytes.Buffer) {
+	b := byte(r.Receipt)
+	if r.DeliveryAck {
+		b |= 0x04
+	}
+	if r.ManualUserAck {
+		b |= 0x08
+	}
+	if r.IntermediateNotif {
+		b |= 0x10
+	}
+	buf.WriteByte(b)
+}
+
+func (r *registeredDelivery) readFrom(buf *bytes.Buffer) error {
+	b, e := buf.ReadByte()
+	if e == nil {
+		r.Receipt = deliveryReceipt(b & 0x03)
+		r.DeliveryAck = b&0x04 == 0x04
+		r.ManualUserAck = b&0x08 == 0x08
+		r.IntermediateNotif = b&0x10 == 0x10
+	}
+	return e
 }
 
 type SubmitSM struct {
