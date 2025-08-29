@@ -108,6 +108,9 @@ func (b *Bind) serve() error {
 	enquireT.Stop()
 	b.con.Close()
 	b.eventQ <- message{id: closeConnection}
+	if UnboundNotify != nil {
+		UnboundNotify(b.BindInfo, b.con.RemoteAddr())
+	}
 
 	return nil
 }

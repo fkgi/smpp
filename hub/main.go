@@ -157,11 +157,13 @@ func main() {
 		go func(i int) {
 			for {
 				binds[i] = &smpp.Bind{BindInfo: info}
-				log.Println("[INFO]", "connecting SMPP", binds[i].BindType, "Bind to", dsts[i])
+				log.Println("[INFO]", "bind", i, ": connecting SMPP", binds[i].BindType, "bind to", dsts[i])
 				c, e := net.DialTCP("tcp", localAddr, dsts[i])
 				if e != nil {
-					log.Println("[ERROR]", "failed to connect SMPP to", dsts[i], ":", e)
-					time.Sleep(time.Second * 5)
+					log.Println("[ERROR]", "bind", i, ": closed, error=", e)
+					if o, ok := e.(*net.OpError); !ok || !o.Timeout() {
+						time.Sleep(time.Second * 30)
+					}
 					continue
 				}
 
@@ -173,7 +175,7 @@ func main() {
 					break
 				}
 
-				log.Println("[INFO]", "closed, error=", binds[i].DialAndServe(c))
+				log.Println("[INFO]", "bind", i, ": closed, error=", binds[i].DialAndServe(c))
 				binds[i] = nil
 
 				if cl := <-closer; cl != nil {
@@ -190,14 +192,22 @@ func main() {
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	if call := <-sigc; call != nil {
-		log.Println("[INFO]", "closing bind")
+		log.Println("[INFO]", "closing binds")
 		cl := <-closer
 		for _, v := range cl {
 			v()
 		}
 		closer <- nil
-		time.Sleep(time.Second * 5)
-		os.Exit(0)
+
+		for w := true; w; {
+			w = false
+			for _, b := range binds {
+				if b != nil {
+					w = true
+					time.Sleep(time.Millisecond * 100)
+				}
+			}
+		}
 	}
 }
 

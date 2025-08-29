@@ -125,7 +125,7 @@ func (b *Bind) ListenAndServe(c net.Conn) (e error) {
 	}
 
 	if BoundNotify != nil {
-		BoundNotify(b.BindInfo)
+		BoundNotify(b.BindInfo, b.con.RemoteAddr())
 	}
 
 	return b.serve()
@@ -198,7 +198,7 @@ func (b *Bind) DialAndServe(c net.Conn) (e error) {
 	}
 
 	if BoundNotify != nil {
-		BoundNotify(b.BindInfo)
+		BoundNotify(b.BindInfo, b.con.RemoteAddr())
 	}
 
 	return b.serve()
