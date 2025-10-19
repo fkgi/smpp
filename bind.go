@@ -1,6 +1,7 @@
 package smpp
 
 import (
+	"bufio"
 	"errors"
 	"net"
 	"time"
@@ -66,9 +67,11 @@ func (b *Bind) ListenAndServe(c net.Conn) (e error) {
 	b.sequence <- 1
 	b.ver = 0x34
 
-	msg, e := b.readPDU()
-	if e != nil {
-		c.Close()
+	buf := bufio.NewReadWriter(bufio.NewReader(c), bufio.NewWriter(c))
+	defer c.Close()
+
+	var msg message
+	if msg, e = readPDU(buf); e != nil {
 		return
 	}
 
@@ -80,11 +83,10 @@ func (b *Bind) ListenAndServe(c net.Conn) (e error) {
 	case BindTransceiver:
 		b.BindType = TRxBind
 	default:
-		b.writePDU(message{
+		writePDU(buf, message{
 			id:   GenericNack,
 			stat: StatInvCmdID,
 			seq:  msg.seq})
-		c.Close()
 		e = errors.New("invalid request for binding")
 		return
 	}
@@ -96,11 +98,10 @@ func (b *Bind) ListenAndServe(c net.Conn) (e error) {
 		Version:  b.ver}
 
 	if e = req.Unmarshal(msg.body); e != nil {
-		b.writePDU(message{
+		writePDU(buf, message{
 			id:   res.CommandID(),
 			stat: StatBindFail,
 			seq:  msg.seq})
-		c.Close()
 		return
 	}
 
@@ -115,12 +116,11 @@ func (b *Bind) ListenAndServe(c net.Conn) (e error) {
 		b.ver = req.Version
 	}
 
-	if e = b.writePDU(message{
+	if e = writePDU(buf, message{
 		id:   res.CommandID(),
 		stat: StatOK,
 		seq:  msg.seq,
 		body: res.Marshal(b.ver)}); e != nil {
-		c.Close()
 		return
 	}
 
@@ -128,7 +128,7 @@ func (b *Bind) ListenAndServe(c net.Conn) (e error) {
 		BoundNotify(b.BindInfo, b.con.RemoteAddr())
 	}
 
-	return b.serve()
+	return b.serve(buf)
 }
 
 func (b *Bind) DialAndServe(c net.Conn) (e error) {
@@ -137,11 +137,8 @@ func (b *Bind) DialAndServe(c net.Conn) (e error) {
 	b.sequence <- 1
 	b.ver = 0x34
 
-	defer func() {
-		if e != nil {
-			c.Close()
-		}
-	}()
+	buf := bufio.NewReadWriter(bufio.NewReader(c), bufio.NewWriter(c))
+	defer c.Close()
 
 	req := bindReq{
 		SystemID:   ID,
@@ -163,14 +160,14 @@ func (b *Bind) DialAndServe(c net.Conn) (e error) {
 	}
 	seq := b.nextSequence()
 
-	if e = b.writePDU(message{
+	if e = writePDU(buf, message{
 		id:   req.CommandID(),
 		seq:  seq,
 		body: req.Marshal(b.ver)}); e != nil {
 		return
 	}
 
-	msg, e := b.readPDU()
+	msg, e := readPDU(buf)
 	if e != nil {
 		return
 	}
@@ -201,7 +198,7 @@ func (b *Bind) DialAndServe(c net.Conn) (e error) {
 		BoundNotify(b.BindInfo, b.con.RemoteAddr())
 	}
 
-	return b.serve()
+	return b.serve(buf)
 }
 
 func (b *Bind) Close() {

@@ -50,7 +50,7 @@ func main() {
 	ts := flag.Bool("t", false, "enable TLS")
 	cr := flag.String("c", "", "TLS crt file")
 	ky := flag.String("k", "", "TLS key file")
-	dict := flag.String("d", "dictionary.xml", "Diameter dictionary file `path`.")
+	dict := flag.String("d", "dictionary.xml", "SMPP dictionary file `path`.")
 	help := flag.Bool("h", false, "Print usage")
 	verbose = flag.Bool("v", false, "Verbose log output")
 	flag.Parse()
@@ -84,9 +84,7 @@ func main() {
 	}
 
 	if *id == "" {
-		fmt.Println("invalid empty system ID in flag -s")
-		printHelp()
-		os.Exit(1)
+		log.Fatalln("[ERROR]", "invalid empty system ID")
 	}
 	smpp.ID = *id
 
@@ -101,9 +99,7 @@ func main() {
 	case "svr":
 		bind.BindType = smpp.NilBind
 	default:
-		fmt.Println("invalid bind type", *bindType, "for flag -d")
-		printHelp()
-		os.Exit(1)
+		log.Fatalln("[ERROR]", "invalid bind type", *bindType)
 	}
 	bind.Password = *pw
 	bind.SystemType = *st
@@ -113,10 +109,8 @@ func main() {
 
 	log.Println("[INFO]", "booting Round-Robin diagnostic/debug subsystem for SMPP...")
 	if *bindType == "svr" {
-		buf := new(strings.Builder)
-		fmt.Fprintln(buf, "running as SMSC")
-		fmt.Fprintln(buf, "| system ID:", *id)
-		log.Print("[INFO]", buf)
+		log.Println("[INFO]", "running as SMSC",
+			"\n| system ID:", *id)
 	} else {
 		buf := new(strings.Builder)
 		fmt.Fprintln(buf, "running as ESME")
@@ -171,11 +165,9 @@ func main() {
 		var l net.Listener
 		var e error
 		if *ts {
-			buf := new(strings.Builder)
-			fmt.Fprintln(buf, "listening SMPP on", addr, "with TLS")
-			fmt.Fprintln(buf, "| Cert file:", *cr)
-			fmt.Fprintln(buf, "| Key file :", *ky)
-			log.Print("[INFO]", buf)
+			log.Println("[INFO]", "listening SMPP on", addr, "with TLS",
+				"\n| Cert file:", *cr,
+				"\n| Key file :", *ky)
 
 			var cer tls.Certificate
 			if cer, e = tls.LoadX509KeyPair(*cr, *ky); e == nil {

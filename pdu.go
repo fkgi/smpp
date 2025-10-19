@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 
 	"github.com/fkgi/teldata"
 )
@@ -61,64 +62,41 @@ func MakePDUof(c CommandID) PDU {
 	return nil
 }
 
-func (b *Bind) readPDU() (msg message, e error) {
+func readPDU(r *bufio.ReadWriter) (msg message, e error) {
 	var l uint32
-	if e = binary.Read(b.con, binary.BigEndian, &l); e != nil {
-		return
-	}
-	if l < 16 {
+	if e = binary.Read(r, binary.BigEndian, &l); e != nil {
+	} else if l < 16 {
 		e = errors.New("invalid header")
-		return
-	}
-	l -= 16
-	if e = binary.Read(b.con, binary.BigEndian, &(msg.id)); e != nil {
-		return
-	}
-	if e = binary.Read(b.con, binary.BigEndian, &(msg.stat)); e != nil {
-		return
-	}
-	if e = binary.Read(b.con, binary.BigEndian, &(msg.seq)); e != nil {
-		return
-	}
-	if l != 0 {
+	} else if e = binary.Read(r, binary.BigEndian, &(msg.id)); e != nil {
+	} else if e = binary.Read(r, binary.BigEndian, &(msg.stat)); e != nil {
+	} else if e = binary.Read(r, binary.BigEndian, &(msg.seq)); e != nil {
+	} else if l -= 16; l != 0 {
 		msg.body = make([]byte, l)
-		offset := 0
-		n := 0
-		for offset < 1 {
-			n, e = b.con.Read(msg.body[offset:])
-			offset += n
-			if e != nil {
-				break
-			}
-		}
+		_, e = io.ReadFull(r, msg.body)
 	}
 
 	if TraceMessage != nil {
-		TraceMessage(Rx, msg.id, msg.stat, msg.seq, msg.body)
+		TraceMessage(Rx, msg.id, msg.stat, msg.seq, msg.body, e)
 	}
 	return
 }
 
-func (b *Bind) writePDU(msg message) (e error) {
+func writePDU(w *bufio.ReadWriter, msg message) (e error) {
 	if msg.body == nil {
 		msg.body = []byte{}
 	}
-	buf := bufio.NewWriter(b.con)
 
-	// command_length
-	binary.Write(buf, binary.BigEndian, uint32(len(msg.body)+16))
-	// command_id
-	binary.Write(buf, binary.BigEndian, msg.id)
-	// command_status
-	binary.Write(buf, binary.BigEndian, msg.stat)
-	// sequence_number
-	binary.Write(buf, binary.BigEndian, msg.seq)
+	if e = binary.Write(w, binary.BigEndian, uint32(len(msg.body)+16)); e != nil { // command_length
+	} else if e = binary.Write(w, binary.BigEndian, msg.id); e != nil { // command_id
+	} else if e = binary.Write(w, binary.BigEndian, msg.stat); e != nil { // command_status
+	} else if e = binary.Write(w, binary.BigEndian, msg.seq); e != nil { // sequence_number
+	} else if _, e = w.Write(msg.body); e != nil {
+	} else {
+		e = w.Flush()
+	}
 
-	buf.Write(msg.body)
-	e = buf.Flush()
-
-	if e == nil && TraceMessage != nil {
-		TraceMessage(Tx, msg.id, msg.stat, msg.seq, msg.body)
+	if TraceMessage != nil {
+		TraceMessage(Tx, msg.id, msg.stat, msg.seq, msg.body, e)
 	}
 	return
 }

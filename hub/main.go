@@ -39,7 +39,7 @@ func (a *destAddrs) Set(v string) error {
 func main() {
 	var dst destAddrs
 	flag.Var(&dst, "r", "SMPP destination address and port")
-	src := flag.String("l", "", "SMPP local address and port")
+	src := flag.String("l", "", "SMPP local address")
 	var e error
 	if smpp.ID, e = os.Hostname(); e != nil {
 		smpp.ID = "hub"
@@ -119,7 +119,7 @@ func main() {
 	}
 
 	if *src != "" {
-		if localAddr, e = net.ResolveTCPAddr("tcp", *src); e != nil {
+		if localAddr, e = net.ResolveTCPAddr("tcp", *src+":0"); e != nil {
 			log.Fatalln("[ERROR]", "invalid local address", e)
 		}
 	}

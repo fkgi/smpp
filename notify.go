@@ -4,7 +4,7 @@ import "net"
 
 var BoundNotify func(BindInfo, net.Addr) = nil
 var UnboundNotify func(BindInfo, net.Addr) = nil
-var TraceMessage func(Direction, CommandID, StatusCode, uint32, []byte) = nil
+var TraceMessage func(Direction, CommandID, StatusCode, uint32, []byte, error) = nil
 
 type Direction bool
 

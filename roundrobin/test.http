@@ -47,9 +47,11 @@ content-type: application/json
         "intermadiate_delivery_notification":false
     },
     "replace_if_present_flag": false,
-    "data_coding": 8,
+    "data_coding": 0,
     "sm_default_sm_id": 0,
-    "short_message": "01400b819010325476f800080a3042304430463048304a",
+    "short_message": {
+        "text": "test"
+    },
     "options": {
         "sar_total_segments": 3,
         "sar_segment_seqnum": 1,

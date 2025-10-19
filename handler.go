@@ -1,6 +1,7 @@
 package smpp
 
 import (
+	"bufio"
 	"time"
 )
 
@@ -14,7 +15,7 @@ type message struct {
 	bind     *Bind
 }
 
-func (b *Bind) serve() error {
+func (b *Bind) serve(buf *bufio.ReadWriter) error {
 	b.eventQ = make(chan message, 1024)
 	b.reqStack = make(map[uint32]chan message)
 
@@ -49,27 +50,27 @@ func (b *Bind) serve() error {
 				if msg.id < 0x80000000 {
 					// Tx req
 					b.reqStack[msg.seq] = msg.callback
-					e = b.writePDU(msg)
+					e = writePDU(buf, msg)
 				} else {
 					// Tx ans
-					e = b.writePDU(msg)
+					e = writePDU(buf, msg)
 				}
 			} else {
 				// Rx event
 				if msg.id == closeConnection {
 					break
 				} else if msg.id == EnquireLink {
-					e = b.writePDU(message{
+					e = writePDU(buf, message{
 						id:  EnquireLinkResp,
 						seq: msg.seq})
 				} else if msg.id == Unbind {
-					b.writePDU(message{
+					writePDU(buf, message{
 						id:  UnbindResp,
 						seq: msg.seq})
 					b.con.Close()
 				} else if msg.id.IsRequest() {
 					// Rx other req
-					e = b.writePDU(message{
+					e = writePDU(buf, message{
 						id:   GenericNack,
 						stat: StatInvCmdID,
 						seq:  msg.seq})
@@ -90,7 +91,7 @@ func (b *Bind) serve() error {
 	}()
 
 	// worker for Rx data from socket
-	for msg, e := b.readPDU(); e == nil; msg, e = b.readPDU() {
+	for msg, e := readPDU(buf); e == nil; msg, e = readPDU(buf) {
 		switch msg.id {
 		// case QuerySm:
 		case SubmitSm, DeliverSm, DataSm:
