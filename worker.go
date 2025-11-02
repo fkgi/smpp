@@ -10,7 +10,7 @@ const (
 	maxWorkers = 65535 - minWorkers
 )
 
-var sharedQ = make(chan message, maxWorkers)
+var sharedQ = make(chan message, minWorkers+maxWorkers)
 var activeWorkers = make(chan int, 1)
 
 func init() {

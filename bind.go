@@ -40,6 +40,8 @@ type BindInfo struct {
 	TypeOfNumber  teldata.NatureOfAddress
 	NumberingPlan teldata.NumberingPlan
 	AddressRange  string
+
+	Metadata any
 }
 
 type Bind struct {
@@ -226,6 +228,8 @@ func (b *Bind) Close() {
 
 func (b *Bind) Send(r PDU) (s StatusCode, a PDU, e error) {
 	if b.reqStack == nil {
+		// s= StatInvBndSts
+		// a=&genericNack{}
 		e = errors.New("closed bind")
 		return
 	}
