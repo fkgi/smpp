@@ -55,6 +55,7 @@ func main() {
 	dict := flag.String("d", "dictionary.xml", "Diameter dictionary file `path`.")
 	gsm := flag.Bool("g", false, "Set SMSC default alphabet to GSM 7bit")
 	help := flag.Bool("h", false, "Print usage")
+	to := flag.Int("t", int(smpp.Expire/time.Second), "Message timeout timer [s]")
 	verbose = flag.Bool("v", false, "Verbose log output")
 	flag.Parse()
 
@@ -68,6 +69,7 @@ func main() {
 		smpp.TraceMessage = nil
 	}
 	smpp.ID = *id
+	smpp.Expire = time.Duration(*to) * time.Second
 
 	log.Println("[INFO]", "loading dictionary file", *dict)
 	if data, e := os.ReadFile(*dict); e != nil {
@@ -156,6 +158,13 @@ func main() {
 	for i := range dsts {
 		go func(i int) {
 			for {
+				if cl := <-closer; cl == nil {
+					closer <- cl
+					break
+				} else {
+					closer <- cl
+				}
+
 				binds[i] = &smpp.Bind{BindInfo: info}
 				log.Println("[INFO]", "bind", i, ": connecting SMPP", binds[i].BindType, "bind to", dsts[i])
 				c, e := net.DialTCP("tcp", localAddr, dsts[i])
@@ -185,6 +194,7 @@ func main() {
 					closer <- cl
 					break
 				}
+				time.Sleep(time.Second * 30)
 			}
 		}(i)
 	}

@@ -10,7 +10,7 @@ var (
 	ID = ""
 	// WhiteList []BindInfo
 	KeepAlive = time.Second * 30
-	Expire    = time.Second
+	Expire    = time.Second * 10
 	Indent    = "|"
 )
 
