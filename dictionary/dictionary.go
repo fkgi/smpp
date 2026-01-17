@@ -1,6 +1,7 @@
 package dictionary
 
 import (
+	"encoding/hex"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -62,14 +63,15 @@ func LoadDictionary(data []byte) (xd XDictionary, e error) {
 			}
 		case "OctetString":
 			encParams[p.N] = func(v any) (uint16, []byte, error) {
-				i, ok := v.([]byte)
+				i, ok := v.(string)
 				if !ok {
 					return id, nil, errors.New("data type mismatch")
 				}
-				return id, i, nil
+				data, e := hex.DecodeString(i)
+				return id, data, e
 			}
 			decParams[id] = func(d []byte) (string, any, error) {
-				return n, d, nil
+				return n, hex.EncodeToString(d), nil
 			}
 		case "Enumerated":
 			encEnum := map[string]byte{}
