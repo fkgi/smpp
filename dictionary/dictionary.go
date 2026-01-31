@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"encoding/xml"
 	"errors"
-	"fmt"
 
 	"github.com/fkgi/smpp"
 )
@@ -146,7 +145,6 @@ func init() {
 	smpp.DecodeParameter = func(i uint16, o []byte) (string, any, error) {
 		if f, ok := decParams[i]; ok {
 			s, a, e := f(o)
-			fmt.Println(i, o, s, a, e)
 			return s, a, e
 		}
 		return "", nil, errors.New("unknown parameter")
@@ -155,7 +153,6 @@ func init() {
 	smpp.EncodeParameter = func(s string, a any) (uint16, []byte, error) {
 		if f, ok := encParams[s]; ok {
 			i, o, e := f(a)
-			fmt.Println(s, a, i, o, e)
 			return i, o, e
 		}
 		return 0, nil, errors.New("unknown parameter")

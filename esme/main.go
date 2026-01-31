@@ -169,6 +169,7 @@ func main() {
 				log.Println("[INFO]", "bind", i, ": connecting SMPP", binds[i].BindType, "bind to", dsts[i])
 				c, e := net.DialTCP("tcp", localAddr, dsts[i])
 				if e != nil {
+					binds[i] = nil
 					log.Println("[ERROR]", "bind", i, ": closed, error=", e)
 					if o, ok := e.(*net.OpError); !ok || !o.Timeout() {
 						time.Sleep(time.Second * 30)
