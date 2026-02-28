@@ -2,9 +2,11 @@ package main
 
 import (
 	"crypto/tls"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
@@ -19,55 +21,58 @@ import (
 	"github.com/fkgi/teldata"
 )
 
-func printHelp() {
-	fmt.Printf("Usage: %s [OPTION]... [[IP]:PORT]\n", os.Args[0])
-	fmt.Println("Args")
-	fmt.Println("\tIP: SMPP peer address when act as ESME, or SMPP local address when act as SMSC.")
-	fmt.Println("\tPORT: SMPP peer port when act as ESME, or SMPP local port when act as SMSC. (default :2775)")
-	fmt.Println()
-	flag.PrintDefaults()
-}
-
 var (
-	verbose  *bool
-	bindType *string
+	frontend  string
+	verbose   *bool
+	localAddr *net.TCPAddr = nil
 )
 
+type destAddrs []string
+
+func (a *destAddrs) String() string {
+	return fmt.Sprintf("%v", *a)
+}
+func (a *destAddrs) Set(v string) error {
+	*a = append(*a, v)
+	return nil
+}
+
 func main() {
+	var dst destAddrs
+	flag.Var(&dst, "r", "SMPP destination address and port")
+	src := flag.String("l", "", "SMPP local address")
 	var e error
 	if smpp.ID, e = os.Hostname(); e != nil {
-		smpp.ID = "roundrobin"
+		smpp.ID = "hub"
 	}
 	id := flag.String("s", smpp.ID, "System ID")
-	lh := flag.String("i", ":8080", "HTTP local address")
+	lh := flag.String("i", "", "HTTP local address")
 	ph := flag.String("b", "", "HTTP backend address")
-	bindType = flag.String("x", "svr", "Bind type of client [tx/rx/trx] or server [svr]")
 	pw := flag.String("p", "", "Password for ESME authentication")
 	st := flag.String("y", "DEBUGGER", "Type of ESME system")
 	tn := flag.Uint("o", 0, "Type of Number for ESME address")
 	np := flag.Uint("n", 0, "Numbering Plan Indicator for ESME address")
 	ar := flag.String("a", "", "UNIX Regular Expression notation of ESME address")
-	ts := flag.Bool("t", false, "enable TLS")
-	cr := flag.String("c", "", "TLS crt file")
-	ky := flag.String("k", "", "TLS key file")
-	dict := flag.String("d", "dictionary.xml", "SMPP dictionary file `path`.")
+	gsm := flag.Bool("g", false, "Set SMSC default alphabet to GSM 7bit")
+	enc := flag.Bool("e", false, "Enable TLS for SMPP connection")
 	help := flag.Bool("h", false, "Print usage")
+	to := flag.Int("t", int(smpp.Expire/time.Second), "Message timeout timer [s]")
 	verbose = flag.Bool("v", false, "Verbose log output")
 	flag.Parse()
 
 	if *help {
-		printHelp()
+		fmt.Printf("Usage: %s [OPTION]...\n", os.Args[0])
+		flag.PrintDefaults()
 		return
 	}
 
 	if !*verbose {
 		smpp.TraceMessage = nil
 	}
+	smpp.ID = *id
+	smpp.Expire = time.Duration(*to) * time.Second
 
-	log.Println("[INFO]", "loading dictionary file", *dict)
-	if data, e := os.ReadFile(*dict); e != nil {
-		log.Fatalln("[ERROR]", "failed to open dictionary file:", e)
-	} else if dicData, e := dictionary.LoadDictionary(data); e != nil {
+	if dicData, e := dictionary.LoadDictionary(nil); e != nil {
 		log.Fatalln("[ERROR]", "failed to read dictionary file:", e)
 	} else {
 		buf := new(strings.Builder)
@@ -78,136 +83,173 @@ func main() {
 		log.Println("[INFO]", buf)
 	}
 
-	addr := flag.Arg(0)
-	if addr == "" {
-		addr = ":2775"
-	}
+	smpp.DefaultAlphabetIsGSM = *gsm
 
-	if *id == "" {
-		log.Fatalln("[ERROR]", "invalid empty system ID")
+	if len(*lh) != 0 {
+		if a, e := net.ResolveTCPAddr("tcp", *lh); e != nil {
+			log.Fatalln("[ERROR]", "invalid HTTP local address:", e)
+		} else {
+			frontend = a.String()
+			log.Println("[INFO]", "HTTP interface:", frontend)
+		}
 	}
-	smpp.ID = *id
-
-	bind := smpp.Bind{}
-	switch *bindType {
-	case "tx":
-		bind.BindType = smpp.TxBind
-	case "rx":
-		bind.BindType = smpp.RxBind
-	case "trx":
-		bind.BindType = smpp.TRxBind
-	case "svr":
-		bind.BindType = smpp.NilBind
-	default:
-		log.Fatalln("[ERROR]", "invalid bind type", *bindType)
-	}
-	bind.Password = *pw
-	bind.SystemType = *st
-	bind.TypeOfNumber = teldata.NatureOfAddress(*tn)
-	bind.NumberingPlan = teldata.NumberingPlan(*np)
-	bind.AddressRange = *ar
-
-	log.Println("[INFO]", "booting Round-Robin diagnostic/debug subsystem for SMPP...")
-	if *bindType == "svr" {
-		log.Println("[INFO]", "running as SMSC",
-			"\n| system ID:", *id)
-	} else {
-		buf := new(strings.Builder)
-		fmt.Fprintln(buf, "running as ESME")
-		fmt.Fprintln(buf, "| system ID  :", *id)
-		fmt.Fprintln(buf, "| password   :", *pw)
-		fmt.Fprintln(buf, "| system type:", *st)
-		fmt.Fprintf(buf, "| address    : %s(ton=%d, npi=%d)", *ar, *tn, *np)
-		log.Print("[INFO]", buf)
-	}
-
-	dictionary.Backend = "http://" + *ph
-	_, e = url.Parse(dictionary.Backend)
-	if e != nil || len(*ph) == 0 {
-		log.Println("[ERROR]", "invalid HTTP backend host, SMPP answer will be always failed")
-		dictionary.Backend = ""
-	} else {
+	if len(*ph) != 0 {
+		dictionary.Backend = "http://" + *ph
+		if _, e = url.Parse(dictionary.Backend); e != nil {
+			log.Fatalln("[ERROR]", "invalid HTTP backend host:", e)
+		}
 		log.Println("[INFO]", "HTTP backend:", dictionary.Backend)
 		smpp.RequestHandler = dictionary.HandleSMPP
 	}
 
-	http.HandleFunc("/smppmsg/v1/data", func(w http.ResponseWriter, r *http.Request) {
-		dictionary.HandleHTTP(w, r, &smpp.DataSM{}, &bind)
-	})
-	http.HandleFunc("/smppmsg/v1/deliver", func(w http.ResponseWriter, r *http.Request) {
-		dictionary.HandleHTTP(w, r, &smpp.DeliverSM{}, &bind)
-	})
-	http.HandleFunc("/smppmsg/v1/submit", func(w http.ResponseWriter, r *http.Request) {
-		dictionary.HandleHTTP(w, r, &smpp.SubmitSM{}, &bind)
-	})
-
-	log.Println("[INFO]", "listening HTTP...\n| local port:", *lh)
-	go func() {
-		e := http.ListenAndServe(*lh, nil)
-		if e != nil {
-			log.Println("[WARN]", "failed to listen HTTP, Tx request is not available:", e)
-		}
-	}()
-
-	close := func() {
-		sigc := make(chan os.Signal, 1)
-		signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
-		if call := <-sigc; call != nil {
-			log.Println("[INFO]", "closing bind")
-			bind.Close()
-			time.Sleep(time.Second * 5)
-			os.Exit(0)
-		}
-	}
-
-	if *bindType == "svr" {
-		// run as SMSC
-		var l net.Listener
-		var e error
-		if *ts {
-			log.Println("[INFO]", "listening SMPP on", addr, "with TLS",
-				"\n| Cert file:", *cr,
-				"\n| Key file :", *ky)
-
-			var cer tls.Certificate
-			if cer, e = tls.LoadX509KeyPair(*cr, *ky); e == nil {
-				l, e = tls.Listen("tcp", addr, &tls.Config{
-					InsecureSkipVerify: true,
-					Certificates:       []tls.Certificate{cer}})
-			}
-		} else {
-			log.Println("[INFO]", "listening SMPP on", addr, "without TLS")
-			l, e = net.Listen("tcp", addr)
-		}
-		if e != nil {
-			log.Fatalln(e)
-		}
-
-		c, e := l.Accept()
-		if e != nil {
-			log.Fatalln(e)
-		}
-		l.Close()
-
-		go close()
-		log.Println("[INFO]", "closed, error=", bind.ListenAndServe(c))
+	info := smpp.BindInfo{
+		Password:      *pw,
+		SystemType:    *st,
+		TypeOfNumber:  teldata.NatureOfAddress(*tn),
+		NumberingPlan: teldata.NumberingPlan(*np),
+		AddressRange:  *ar}
+	if len(frontend) != 0 && len(dictionary.Backend) != 0 {
+		info.BindType = smpp.TRxBind
+	} else if len(frontend) != 0 {
+		info.BindType = smpp.TxBind
+	} else if len(dictionary.Backend) != 0 {
+		info.BindType = smpp.RxBind
 	} else {
-		// run as ESME
-		var c net.Conn
-		var e error
-		if *ts {
-			log.Println("[INFO]", "connecting SMPP to", addr, "with TLS")
-			c, e = tls.Dial("tcp", addr,
-				&tls.Config{InsecureSkipVerify: true})
-		} else {
-			log.Println("[INFO]", "connecting SMPP to", addr, "without TLS")
-			c, e = net.Dial("tcp", addr)
-		}
-		if e != nil {
-			log.Fatalln(e)
-		}
-
-		go close()
-		log.Println("[INFO]", "closed, error=", bind.DialAndServe(c))
+		log.Fatalln("[ERROR]", "no HTTP side information")
 	}
+
+	if *src != "" {
+		if localAddr, e = net.ResolveTCPAddr("tcp", *src+":0"); e != nil {
+			log.Fatalln("[ERROR]", "invalid local address", e)
+		}
+	}
+
+	dsts := []*net.TCPAddr{}
+	for _, d := range dst {
+		if a, e := net.ResolveTCPAddr("tcp", d); e != nil {
+			log.Fatalln("[ERROR]", "invalid destination address", e)
+		} else {
+			dsts = append(dsts, a)
+		}
+	}
+	binds := make([]*smpp.Bind, len(dsts))
+
+	if info.BindType != smpp.RxBind {
+		http.HandleFunc("/smppmsg/v1/data", func(w http.ResponseWriter, r *http.Request) {
+			handleHTTP(w, r, &smpp.DataSM{}, binds)
+		})
+		http.HandleFunc("/smppmsg/v1/submit", func(w http.ResponseWriter, r *http.Request) {
+			handleHTTP(w, r, &smpp.SubmitSM{}, binds)
+		})
+	}
+	if len(frontend) != 0 {
+		log.Println("[INFO]", "listening HTTP...")
+		go func() {
+			if e := http.ListenAndServe(frontend, nil); e != nil {
+				log.Fatalln("[ERROR]", "failed to listen HTTP:", e)
+			}
+		}()
+	}
+
+	closer := make(chan map[*net.TCPAddr]func(), 1)
+	closer <- map[*net.TCPAddr]func(){}
+	for i := range dsts {
+		go func(i int) {
+			for {
+				if cl := <-closer; cl == nil {
+					closer <- cl
+					break
+				} else {
+					closer <- cl
+				}
+
+				binds[i] = &smpp.Bind{BindInfo: info}
+				log.Println("[INFO]", "bind", i, ": connecting SMPP", binds[i].BindType, "bind to", dsts[i])
+				var c net.Conn
+				var e error
+				if c, e = net.DialTCP("tcp", localAddr, dsts[i]); e != nil {
+					binds[i] = nil
+					log.Println("[ERROR]", "bind", i, ": closed, error=", e)
+					if o, ok := e.(*net.OpError); !ok || !o.Timeout() {
+						time.Sleep(time.Second * 30)
+					}
+					continue
+				}
+				if *enc {
+					c = tls.Client(c, &tls.Config{InsecureSkipVerify: true})
+				}
+
+				if cl := <-closer; cl != nil {
+					cl[dsts[i]] = binds[i].Close
+					closer <- cl
+				} else {
+					closer <- cl
+					break
+				}
+
+				log.Println("[INFO]", "bind", i, ": closed, error=", binds[i].DialAndServe(c))
+				binds[i] = nil
+
+				if cl := <-closer; cl != nil {
+					delete(cl, dsts[i])
+					closer <- cl
+				} else {
+					closer <- cl
+					break
+				}
+				time.Sleep(time.Second * 30)
+			}
+		}(i)
+	}
+
+	sigc := make(chan os.Signal, 1)
+	signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
+	if call := <-sigc; call != nil {
+		log.Println("[INFO]", "closing binds")
+		cl := <-closer
+		for _, v := range cl {
+			v()
+		}
+		closer <- nil
+
+		for w := true; w; {
+			w = false
+			for _, b := range binds {
+				if b != nil {
+					w = true
+					time.Sleep(time.Millisecond * 100)
+				}
+			}
+		}
+	}
+}
+
+func handleHTTP(w http.ResponseWriter, r *http.Request, req smpp.PDU, b []*smpp.Bind) {
+	offset := rand.Intn(len(b))
+	if b[offset] != nil && b[offset].IsActive() {
+		dictionary.HandleHTTP(w, r, req, b[offset])
+		return
+	}
+
+	for i := offset + 1; i < len(b); i++ {
+		if b[i] != nil && b[i].IsActive() {
+			dictionary.HandleHTTP(w, r, req, b[i])
+			return
+		}
+	}
+	for i := 0; i < offset; i++ {
+		if b[i] != nil && b[i].IsActive() {
+			dictionary.HandleHTTP(w, r, req, b[i])
+			return
+		}
+	}
+
+	data, _ := json.Marshal(struct {
+		T string `json:"title"`
+		D string `json:"detail"`
+	}{T: "failed to send request", D: "no SMPP connection is available"})
+
+	w.Header().Add("Content-Type", "application/problem+json")
+	w.WriteHeader(http.StatusInternalServerError)
+	w.Write(data)
 }

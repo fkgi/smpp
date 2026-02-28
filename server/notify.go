@@ -31,6 +31,11 @@ func init() {
 		fmt.Fprintln(buf, "| peer address    :", a)
 		fmt.Fprintln(buf, "| peer system ID  :", i.PeerID)
 		fmt.Fprint(buf, "| bind type       : ", i.BindType)
+		fmt.Fprintln(buf)
+		fmt.Fprintln(buf, "| ESME password   :", i.Password)
+		fmt.Fprintln(buf, "| ESME system type:", i.SystemType)
+		fmt.Fprintf(buf, "| ESME address    : %s(ton=%d, npi=%d)",
+			i.AddressRange, i.TypeOfNumber, i.NumberingPlan)
 		log.Println("[INFO]", buf)
 	}
 

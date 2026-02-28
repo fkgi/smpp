@@ -1,12 +1,16 @@
 package dictionary
 
 import (
+	_ "embed"
 	"encoding/hex"
 	"encoding/xml"
 	"errors"
 
 	"github.com/fkgi/smpp"
 )
+
+//go:embed dictionary.xml
+var dicfile []byte
 
 type XDictionary struct {
 	XMLName xml.Name `xml:"dictionary"`
@@ -27,6 +31,10 @@ var (
 )
 
 func LoadDictionary(data []byte) (xd XDictionary, e error) {
+	if data == nil {
+		data = dicfile
+	}
+
 	if e = xml.Unmarshal(data, &xd); e != nil {
 		return xd, e
 	}
