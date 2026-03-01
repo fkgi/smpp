@@ -66,6 +66,7 @@ func main() {
 		return
 	}
 
+	log.Println("[INFO]", "booting Round-Robin debugger for SMPP...")
 	if !*verbose {
 		smpp.TraceMessage = nil
 	}
