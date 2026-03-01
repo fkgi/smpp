@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/tls"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"log"
 	"math/rand"
@@ -12,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -21,57 +21,8 @@ import (
 	"github.com/fkgi/teldata"
 )
 
-var (
-	frontend  string
-	verbose   *bool
-	localAddr *net.TCPAddr = nil
-)
-
-type destAddrs []string
-
-func (a *destAddrs) String() string {
-	return fmt.Sprintf("%v", *a)
-}
-func (a *destAddrs) Set(v string) error {
-	*a = append(*a, v)
-	return nil
-}
-
 func main() {
-	var dst destAddrs
-	flag.Var(&dst, "r", "SMPP destination address and port")
-	src := flag.String("l", "", "SMPP local address")
-	var e error
-	if smpp.ID, e = os.Hostname(); e != nil {
-		smpp.ID = "hub"
-	}
-	id := flag.String("s", smpp.ID, "System ID")
-	lh := flag.String("i", "", "HTTP local address")
-	ph := flag.String("b", "", "HTTP backend address")
-	pw := flag.String("p", "", "Password for ESME authentication")
-	st := flag.String("y", "DEBUGGER", "Type of ESME system")
-	tn := flag.Uint("o", 0, "Type of Number for ESME address")
-	np := flag.Uint("n", 0, "Numbering Plan Indicator for ESME address")
-	ar := flag.String("a", "", "UNIX Regular Expression notation of ESME address")
-	gsm := flag.Bool("g", false, "Set SMSC default alphabet to GSM 7bit")
-	enc := flag.Bool("e", false, "Enable TLS for SMPP connection")
-	help := flag.Bool("h", false, "Print usage")
-	to := flag.Int("t", int(smpp.Expire/time.Second), "Message timeout timer [s]")
-	verbose = flag.Bool("v", false, "Verbose log output")
-	flag.Parse()
-
-	if *help {
-		fmt.Printf("Usage: %s [OPTION]...\n", os.Args[0])
-		flag.PrintDefaults()
-		return
-	}
-
 	log.Println("[INFO]", "booting Round-Robin debugger for SMPP...")
-	if !*verbose {
-		smpp.TraceMessage = nil
-	}
-	smpp.ID = *id
-	smpp.Expire = time.Duration(*to) * time.Second
 
 	if dicData, e := dictionary.LoadDictionary(nil); e != nil {
 		log.Fatalln("[ERROR]", "failed to read dictionary file:", e)
@@ -84,31 +35,53 @@ func main() {
 		log.Println("[INFO]", buf)
 	}
 
-	smpp.DefaultAlphabetIsGSM = *gsm
-
-	if len(*lh) != 0 {
-		if a, e := net.ResolveTCPAddr("tcp", *lh); e != nil {
-			log.Fatalln("[ERROR]", "invalid HTTP local address:", e)
-		} else {
-			frontend = a.String()
-			log.Println("[INFO]", "HTTP interface:", frontend)
-		}
+	smpp.DefaultAlphabetIsGSM = os.Getenv("DEFAULT_ALPHABET") == "gsm7bit"
+	if t, e := strconv.Atoi(os.Getenv("TIMEOUT")); e == nil {
+		smpp.Expire = time.Duration(t) * time.Second
 	}
-	if len(*ph) != 0 {
-		dictionary.Backend = "http://" + *ph
-		if _, e = url.Parse(dictionary.Backend); e != nil {
-			log.Fatalln("[ERROR]", "invalid HTTP backend host:", e)
-		}
+	if os.Getenv("VERBOSE") != "yes" {
+		smpp.TraceMessage = nil
+	}
+
+	frontend := os.Getenv("LOCALAPI_ADDR")
+	if frontend == "" {
+	} else if a, e := net.ResolveTCPAddr("tcp", frontend); e != nil {
+		log.Fatalln("[ERROR]", "invalid HTTP local address:", e)
+	} else {
+		frontend = a.String()
+		log.Println("[INFO]", "HTTP interface:", frontend)
+	}
+
+	if dictionary.Backend = os.Getenv("BACKENDAPI_ADDR"); dictionary.Backend == "" {
+	} else if _, e := url.Parse("http://" + dictionary.Backend); e != nil {
+		log.Fatalln("[ERROR]", "invalid HTTP backend host:", e)
+	} else {
+		dictionary.Backend = "http://" + dictionary.Backend
 		log.Println("[INFO]", "HTTP backend:", dictionary.Backend)
 		smpp.RequestHandler = dictionary.HandleSMPP
 	}
 
+	if smpp.ID = os.Getenv("SYSTEM_ID"); smpp.ID != "" {
+	} else if h, e := os.Hostname(); e == nil {
+		smpp.ID = h
+	} else {
+		smpp.ID = "roundrobin"
+	}
+
 	info := smpp.BindInfo{
-		Password:      *pw,
-		SystemType:    *st,
-		TypeOfNumber:  teldata.NatureOfAddress(*tn),
-		NumberingPlan: teldata.NumberingPlan(*np),
-		AddressRange:  *ar}
+		Password:   os.Getenv("PASSWORD"),
+		SystemType: os.Getenv("TYPE")}
+	if a := strings.SplitN(os.Getenv("ADDRESS"), ":", 3); len(a) != 3 {
+		log.Fatalln("[ERROR]", "invalid ESME address format")
+	} else if t, e := strconv.Atoi(a[0]); e != nil {
+		log.Fatalln("[ERROR]", "invalid TON in ESME address:", e)
+	} else if n, e := strconv.Atoi(a[1]); e != nil {
+		log.Fatalln("[ERROR]", "invalid NPI in ESME address:", e)
+	} else {
+		info.AddressRange = a[2]
+		info.TypeOfNumber = teldata.NatureOfAddress(t)
+		info.NumberingPlan = teldata.NumberingPlan(n)
+	}
 	if len(frontend) != 0 && len(dictionary.Backend) != 0 {
 		info.BindType = smpp.TRxBind
 	} else if len(frontend) != 0 {
@@ -119,15 +92,24 @@ func main() {
 		log.Fatalln("[ERROR]", "no HTTP side information")
 	}
 
-	if *src != "" {
-		if localAddr, e = net.ResolveTCPAddr("tcp", *src+":0"); e != nil {
-			log.Fatalln("[ERROR]", "invalid local address", e)
+	var localAddr *net.TCPAddr = nil
+	if a := os.Getenv("LOCAL_ADDR"); a != "" {
+		var e error
+		if localAddr, e = net.ResolveTCPAddr("tcp", a+":0"); e != nil {
+			log.Fatalln("[ERROR]", "invalid local address:", e)
 		}
 	}
 
 	dsts := []*net.TCPAddr{}
-	for _, d := range dst {
-		if a, e := net.ResolveTCPAddr("tcp", d); e != nil {
+	for i := range 10 {
+		a := os.Getenv(fmt.Sprintf("PEER_ADDR%d", i))
+		if a == "" {
+			continue
+		}
+		if _, _, e := net.SplitHostPort(a); e != nil {
+			a = a + ":2775"
+		}
+		if a, e := net.ResolveTCPAddr("tcp", a); e != nil {
 			log.Fatalln("[ERROR]", "invalid destination address", e)
 		} else {
 			dsts = append(dsts, a)
@@ -136,12 +118,14 @@ func main() {
 	binds := make([]*smpp.Bind, len(dsts))
 
 	if info.BindType != smpp.RxBind {
-		http.HandleFunc("/smppmsg/v1/data", func(w http.ResponseWriter, r *http.Request) {
-			handleHTTP(w, r, &smpp.DataSM{}, binds)
-		})
-		http.HandleFunc("/smppmsg/v1/submit", func(w http.ResponseWriter, r *http.Request) {
-			handleHTTP(w, r, &smpp.SubmitSM{}, binds)
-		})
+		http.HandleFunc("POST /smppmsg/v1/data",
+			func(w http.ResponseWriter, r *http.Request) {
+				handleHTTP(w, r, &smpp.DataSM{}, binds)
+			})
+		http.HandleFunc("POST /smppmsg/v1/submit",
+			func(w http.ResponseWriter, r *http.Request) {
+				handleHTTP(w, r, &smpp.SubmitSM{}, binds)
+			})
 	}
 	if len(frontend) != 0 {
 		log.Println("[INFO]", "listening HTTP...")
@@ -176,7 +160,7 @@ func main() {
 					}
 					continue
 				}
-				if *enc {
+				if os.Getenv("TLS") == "yes" {
 					c = tls.Client(c, &tls.Config{InsecureSkipVerify: true})
 				}
 
