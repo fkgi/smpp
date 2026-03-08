@@ -2,7 +2,7 @@ package smpp
 
 import (
 	"bytes"
-	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"unicode/utf16"
 
@@ -35,13 +35,13 @@ func (u UserData) String() string {
 // Set8bitData set binary data as UD
 func (u *UserData) Set8bitData(d []byte) {
 	if u != nil && len(d) != 0 {
-		u.Text = base64.StdEncoding.EncodeToString(d)
+		u.Text = hex.EncodeToString(d)
 	}
 }
 
 // Get8bitData set binary data as UD
 func (u UserData) Get8bitData() ([]byte, error) {
-	return base64.StdEncoding.DecodeString(u.Text)
+	return hex.DecodeString(u.Text)
 }
 
 func (u *UserData) unmarshal(ud []byte, dc byte, h bool) {
@@ -94,7 +94,7 @@ func (u *UserData) unmarshal(ud []byte, dc byte, h bool) {
 		}
 		u.Text = string(utf16.Decode(s))
 	default:
-		u.Text = base64.StdEncoding.EncodeToString(ud)
+		u.Text = hex.EncodeToString(ud)
 	}
 }
 
@@ -140,7 +140,7 @@ func (u UserData) marshal(dc byte) []byte {
 		}
 		w.Write(ud)
 	default:
-		ud, e := base64.StdEncoding.DecodeString(u.Text)
+		ud, e := hex.DecodeString(u.Text)
 		if e != nil {
 			ud = []byte{}
 		}
