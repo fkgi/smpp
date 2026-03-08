@@ -10,6 +10,15 @@ import (
 )
 
 var Backend string
+var Client http.Client
+
+func init() {
+	t, _ := http.DefaultTransport.(*http.Transport)
+	dt := t.Clone()
+	dt.MaxIdleConns = 0
+	dt.MaxIdleConnsPerHost = 1000
+	Client = http.Client{Transport: dt, Timeout: smpp.Expire}
+}
 
 func HandleSMPP(info smpp.BindInfo, req smpp.PDU) (smpp.StatusCode, smpp.PDU) {
 	var res wrappedResp
@@ -43,7 +52,7 @@ func HandleSMPP(info smpp.BindInfo, req smpp.PDU) (smpp.StatusCode, smpp.PDU) {
 		return smpp.StatSysErr, res.unwrap()
 	}
 
-	r, e := http.Post(Backend+path, "application/json", bytes.NewBuffer(jsondata))
+	r, e := Client.Post(Backend+path, "application/json", bytes.NewBuffer(jsondata))
 	if e != nil {
 		smppErr("failed to send HTTP request", e)
 		return smpp.StatSysErr, res.unwrap()

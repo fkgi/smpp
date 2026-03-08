@@ -21,6 +21,33 @@ import (
 	"github.com/fkgi/teldata"
 )
 
+func getDurationEnv(n string, d time.Duration) time.Duration {
+	if s := os.Getenv(n); s == "" {
+		return d
+	} else if t, e := strconv.Atoi(s); e != nil {
+		log.Printf("[INFO] parameter %s is invalid, set to default %d",
+			n, d/time.Second)
+		return d
+	} else {
+		return time.Second * time.Duration(t)
+	}
+}
+
+func getEnumEnv(n string, d ...string) string {
+	if s := os.Getenv(n); s == "" {
+		return d[0]
+	} else {
+		for _, t := range d {
+			if s == t {
+				return t
+			}
+		}
+		log.Printf("[INFO] parameter %s is invalid, set to default %s",
+			s, d[0])
+		return d[0]
+	}
+}
+
 func main() {
 	log.Println("[INFO]", "booting Round-Robin debugger for SMPP...")
 
@@ -35,11 +62,10 @@ func main() {
 		log.Println("[INFO]", buf)
 	}
 
-	smpp.DefaultAlphabetIsGSM = os.Getenv("DEFAULT_ALPHABET") == "gsm7bit"
-	if t, e := strconv.Atoi(os.Getenv("TIMEOUT")); e == nil {
-		smpp.Expire = time.Duration(t) * time.Second
-	}
-	if os.Getenv("VERBOSE") != "yes" {
+	smpp.DefaultAlphabetIsGSM = getEnumEnv("DEFAULT_ALPHABET", "ascii", "gsm7bit") == "gsm7bit"
+	smpp.Expire = getDurationEnv(os.Getenv("TIMEOUT"), smpp.Expire)
+	smpp.KeepAlive = getDurationEnv(os.Getenv("ENQUIRE_INTERVAL"), smpp.KeepAlive)
+	if getEnumEnv("VERBOSE", "no", "yes") == "no" {
 		smpp.TraceMessage = nil
 	}
 
@@ -52,13 +78,14 @@ func main() {
 		log.Println("[INFO]", "HTTP interface:", frontend)
 	}
 
-	if dictionary.Backend = os.Getenv("BACKENDAPI_ADDR"); dictionary.Backend == "" {
-	} else if _, e := url.Parse("http://" + dictionary.Backend); e != nil {
-		log.Fatalln("[ERROR]", "invalid HTTP backend host:", e)
-	} else {
+	if dictionary.Backend = os.Getenv("BACKENDAPI_ADDR"); dictionary.Backend != "" {
 		dictionary.Backend = "http://" + dictionary.Backend
-		log.Println("[INFO]", "HTTP backend:", dictionary.Backend)
-		smpp.RequestHandler = dictionary.HandleSMPP
+		if _, e := url.Parse(dictionary.Backend); e != nil {
+			log.Fatalln("[ERROR]", "invalid HTTP backend host:", e)
+		} else {
+			log.Println("[INFO]", "HTTP backend:", dictionary.Backend)
+			smpp.RequestHandler = dictionary.HandleSMPP
+		}
 	}
 
 	if smpp.ID = os.Getenv("SYSTEM_ID"); smpp.ID != "" {
@@ -207,6 +234,8 @@ func main() {
 			}
 		}
 	}
+	dictionary.Client.CloseIdleConnections()
+	log.Println("[INFO]", "server stopped")
 }
 
 func handleHTTP(w http.ResponseWriter, r *http.Request, req smpp.PDU, b []*smpp.Bind) {
