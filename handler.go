@@ -96,6 +96,7 @@ func (b *Bind) serve(buf *bufio.ReadWriter) error {
 		// case QuerySm:
 		case SubmitSm, DeliverSm, DataSm:
 			msg.bind = b
+			workerCheck()
 			sharedQ <- msg
 		// case ReplaceSm:
 		// case CancelSm:

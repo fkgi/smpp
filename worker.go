@@ -6,8 +6,9 @@ import (
 )
 
 const (
-	minWorkers = 128
-	maxWorkers = 65535 - minWorkers
+	minWorkers = 10
+	maxWorkers = 20000 - minWorkers
+	cooltime   = time.Second * 5
 )
 
 var sharedQ = make(chan message, minWorkers+maxWorkers)
@@ -15,33 +16,78 @@ var activeWorkers = make(chan int, 1)
 
 func init() {
 	activeWorkers <- 0
-	worker := func() {
-		for c := 0; c < 500; {
-			if len(sharedQ) < minWorkers {
-				time.Sleep(time.Millisecond * 10)
-				c++
-				continue
-			}
-			if req, ok := <-sharedQ; !ok {
-				break
-			} else {
-				handleMsg(req)
-				c = 0
-			}
-		}
-		activeWorkers <- (<-activeWorkers - 1)
-	}
-	for i := 0; i < minWorkers; i++ {
+	for range minWorkers {
 		go func() {
 			for req, ok := <-sharedQ; ok; req, ok = <-sharedQ {
-				a := <-activeWorkers
-				activeWorkers <- a
-				if len(sharedQ) > minWorkers && a < maxWorkers {
-					activeWorkers <- (<-activeWorkers + 1)
-					go worker()
-				}
 				handleMsg(req)
 			}
+		}()
+	}
+	/*
+		worker := func() {
+			for c := 0; c < 500; {
+				if len(sharedQ) < minWorkers {
+					time.Sleep(time.Millisecond * 10)
+					c++
+					continue
+				}
+				if req, ok := <-sharedQ; !ok {
+					break
+				} else {
+					handleMsg(req)
+					c = 0
+				}
+			}
+			activeWorkers <- (<-activeWorkers - 1)
+		}
+		for i := 0; i < minWorkers; i++ {
+			go func() {
+				for req, ok := <-sharedQ; ok; req, ok = <-sharedQ {
+					a := <-activeWorkers
+					activeWorkers <- a
+					if len(sharedQ) > minWorkers && a < maxWorkers {
+						activeWorkers <- (<-activeWorkers + 1)
+						go worker()
+					}
+					handleMsg(req)
+				}
+			}()
+		}
+	*/
+}
+
+func workerCheck() {
+	a := <-activeWorkers
+	acl := len(sharedQ)
+	if acl < (a+minWorkers)*4/5 {
+		activeWorkers <- a
+		return
+	}
+
+	if a+acl > maxWorkers {
+		acl = maxWorkers - a
+	}
+	a += acl
+	activeWorkers <- a
+
+	for range acl {
+		go func() {
+			t := time.NewTimer(cooltime)
+			for run := true; run; {
+				select {
+				case req, ok := <-sharedQ:
+					if ok {
+						handleMsg(req)
+						t.Reset(cooltime)
+					} else {
+						run = false
+					}
+				case <-t.C:
+					run = false
+				}
+			}
+			t.Stop()
+			activeWorkers <- (<-activeWorkers - 1)
 		}()
 	}
 }
