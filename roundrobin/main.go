@@ -94,7 +94,7 @@ func main() {
 		frontend = a.String()
 		log.Println("[INFO]", "listening HTTP...\n | local port:", frontend)
 	}
-	enableTx := getEnumEnv("ENABLE_TX", "no", "yes") == "yes"
+	metricsOnly := getEnumEnv("METRICS_ONLY", "no", "yes") == "yes"
 
 	if dictionary.Backend = os.Getenv("BACKENDAPI_ADDR"); dictionary.Backend != "" {
 		dictionary.Backend = "http://" + dictionary.Backend
@@ -127,9 +127,9 @@ func main() {
 		info.TypeOfNumber = teldata.NatureOfAddress(t)
 		info.NumberingPlan = teldata.NumberingPlan(n)
 	}
-	if len(dictionary.Backend) != 0 && enableTx {
+	if len(dictionary.Backend) != 0 && !metricsOnly {
 		info.BindType = smpp.TRxBind
-	} else if enableTx {
+	} else if !metricsOnly {
 		info.BindType = smpp.TxBind
 	} else if len(dictionary.Backend) != 0 {
 		info.BindType = smpp.RxBind

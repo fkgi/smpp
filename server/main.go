@@ -21,8 +21,8 @@ import (
 func printHelp() {
 	fmt.Printf("Usage: %s [OPTION]... [[IP]:PORT]\n", os.Args[0])
 	fmt.Println("Args")
-	fmt.Println("\tIP: SMPP peer address when act as ESME, or SMPP local address when act as SMSC.")
-	fmt.Println("\tPORT: SMPP peer port when act as ESME, or SMPP local port when act as SMSC. (default :2775)")
+	fmt.Println("\tIP: SMPP local address.")
+	fmt.Println("\tPORT: SMPP local port. (default :2775)")
 	fmt.Println()
 	flag.PrintDefaults()
 }

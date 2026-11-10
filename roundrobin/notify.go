@@ -44,7 +44,7 @@ func init() {
 		buf := new(strings.Builder)
 		fmt.Fprintln(buf, "bind is down")
 		fmt.Fprintln(buf, "| peer address    :", a)
-		fmt.Fprintln(buf, "| peer system ID  :", i.PeerID)
+		fmt.Fprint(buf, "| peer system ID  :", i.PeerID)
 		log.Println("[INFO]", buf)
 	}
 
@@ -59,13 +59,13 @@ func traceMessage(direction string, id smpp.CommandID, st smpp.StatusCode, seq u
 		stat = fmt.Sprintf(", stat=%s", st)
 	}
 	if pdu := smpp.MakePDUof(id); pdu == nil {
-		log.Printf("[INFO] %s %s (seq=%d%s), error=%s",
+		log.Printf("[INFO] %s %s (seq=%d%s), error=%v",
 			direction, id, seq, stat, e)
 	} else if e2 := pdu.Unmarshal(body); e2 != nil {
-		log.Printf("[INFO] %s %s (seq=%d%s), error=%s\n| invalid body data: %s",
+		log.Printf("[INFO] %s %s (seq=%d%s), error=%v\n| invalid body data: %s",
 			direction, id, seq, stat, e, e2)
 	} else {
-		log.Printf("[INFO] %s %s (seq=%d%s), error=%s%s",
+		log.Printf("[INFO] %s %s (seq=%d%s), error=%v%s",
 			direction, id, seq, stat, e, pdu)
 	}
 }
