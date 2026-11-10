@@ -266,3 +266,7 @@ func (b *Bind) Send(r PDU) (s StatusCode, a PDU, e error) {
 func (b *Bind) IsActive() bool {
 	return b.reqStack != nil
 }
+
+func (b *Bind) RemoteAddr() net.Addr {
+	return b.con.RemoteAddr()
+}

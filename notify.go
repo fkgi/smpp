@@ -2,20 +2,22 @@ package smpp
 
 import "net"
 
-var BoundNotify func(BindInfo, net.Addr) = nil
-var UnboundNotify func(BindInfo, net.Addr) = nil
-var TraceMessage func(Direction, CommandID, StatusCode, uint32, []byte, error) = nil
+var (
+	// BoundNotify is called when SMPP bind is up.
+	// Inputs are SMPP bind informations and peer address.
+	BoundNotify func(BindInfo, net.Addr) = nil
 
-type Direction bool
+	// UnboundNotify is called when SMPP bind is up.
+	// Inputs are SMPP bind informations and peer address.
+	UnboundNotify func(BindInfo, net.Addr) = nil
 
-func (v Direction) String() string {
-	if v {
-		return "Tx"
-	}
-	return "Rx"
-}
+	// TraceTxMessage is called when Diameter message is sent.
+	// Inputs are command ID, status code of response, sequence number,
+	// message data and occured error while message handling.
+	TraceTxMessage func(CommandID, StatusCode, uint32, []byte, error) = nil
 
-const (
-	Tx Direction = true
-	Rx Direction = false
+	// TraceRxMessage is called when Diameter message is receved.
+	// Inputs are command ID, status code of response, sequence number,
+	// message data and occured error while message handling.
+	TraceRxMessage func(CommandID, StatusCode, uint32, []byte, error) = nil
 )

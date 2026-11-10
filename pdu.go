@@ -75,8 +75,8 @@ func readPDU(r *bufio.ReadWriter) (msg message, e error) {
 		_, e = io.ReadFull(r, msg.body)
 	}
 
-	if TraceMessage != nil {
-		TraceMessage(Rx, msg.id, msg.stat, msg.seq, msg.body, e)
+	if TraceRxMessage != nil {
+		TraceRxMessage(msg.id, msg.stat, msg.seq, msg.body, e)
 	}
 	return
 }
@@ -95,8 +95,8 @@ func writePDU(w *bufio.ReadWriter, msg message) (e error) {
 		e = w.Flush()
 	}
 
-	if TraceMessage != nil {
-		TraceMessage(Tx, msg.id, msg.stat, msg.seq, msg.body, e)
+	if TraceTxMessage != nil {
+		TraceTxMessage(msg.id, msg.stat, msg.seq, msg.body, e)
 	}
 	return
 }

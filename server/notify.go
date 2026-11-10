@@ -11,17 +11,17 @@ import (
 )
 
 func init() {
-	smpp.TraceMessage = func(di smpp.Direction, id smpp.CommandID, st smpp.StatusCode, seq uint32, body []byte, err error) {
+	smpp.TraceTxMessage = func(id smpp.CommandID, st smpp.StatusCode, seq uint32, body []byte, err error) {
 		stat := ""
 		if !id.IsRequest() {
 			stat = fmt.Sprintf(", stat=%s", st)
 		}
 		if pdu := smpp.MakePDUof(id); pdu == nil {
-			log.Printf("[INFO] %s %s (seq=%d%s), error=%s", di, id, seq, stat, err)
+			log.Printf("[INFO] Tx %s (seq=%d%s), error=%s", id, seq, stat, err)
 		} else if e := pdu.Unmarshal(body); e != nil {
-			log.Printf("[INFO] %s %s (seq=%d%s), error=%s\n| invalid body data: %s", di, id, seq, stat, err, e)
+			log.Printf("[INFO] Tx %s (seq=%d%s), error=%s\n| invalid body data: %s", id, seq, stat, err, e)
 		} else {
-			log.Printf("[INFO] %s %s (seq=%d%s), error=%s%s", di, id, seq, stat, err, pdu)
+			log.Printf("[INFO] Tx %s (seq=%d%s), error=%s%s", id, seq, stat, err, pdu)
 		}
 	}
 

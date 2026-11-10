@@ -21,6 +21,9 @@ import (
 	"github.com/fkgi/teldata"
 )
 
+var binds []*smpp.Bind
+var dsts = []*net.TCPAddr{}
+
 func getDurationEnv(n string, d time.Duration) time.Duration {
 	if s := os.Getenv(n); s == "" {
 		return d
@@ -63,20 +66,35 @@ func main() {
 	}
 
 	smpp.DefaultAlphabetIsGSM = getEnumEnv("DEFAULT_ALPHABET", "ascii", "gsm7bit") == "gsm7bit"
-	smpp.Expire = getDurationEnv(os.Getenv("TIMEOUT"), smpp.Expire)
-	smpp.KeepAlive = getDurationEnv(os.Getenv("ENQUIRE_INTERVAL"), smpp.KeepAlive)
+	smpp.Expire = getDurationEnv("TIMEOUT", smpp.Expire)
+	smpp.KeepAlive = getDurationEnv("ENQUIRE_INTERVAL", smpp.KeepAlive)
 	if getEnumEnv("VERBOSE", "no", "yes") == "no" {
-		smpp.TraceMessage = nil
+		smpp.TraceRxMessage = func(id smpp.CommandID, st smpp.StatusCode, _ uint32, _ []byte, _ error) {
+			count(id, st, true)
+		}
+		smpp.TraceTxMessage = func(id smpp.CommandID, st smpp.StatusCode, _ uint32, _ []byte, _ error) {
+			count(id, st, false)
+		}
+		dictionary.TraceTxHttpRequest = func(_ string, _ []byte, _ int, _ []byte, err error) {
+			if err != nil {
+				log.Printf("[INFO] Tx HTTP request handling failed: %v", err)
+			}
+		}
+		dictionary.TraceRxHttpRequest = func(_ string, _ []byte, _ int, _ []byte, err error) {
+			if err != nil {
+				log.Printf("[INFO] Rx HTTP request handling failed: %v", err)
+			}
+		}
 	}
 
 	frontend := os.Getenv("LOCALAPI_ADDR")
-	if frontend == "" {
-	} else if a, e := net.ResolveTCPAddr("tcp", frontend); e != nil {
+	if a, e := net.ResolveTCPAddr("tcp", frontend); e != nil {
 		log.Fatalln("[ERROR]", "invalid HTTP local address:", e)
 	} else {
 		frontend = a.String()
-		log.Println("[INFO]", "HTTP interface:", frontend)
+		log.Println("[INFO]", "listening HTTP...\n | local port:", frontend)
 	}
+	enableTx := getEnumEnv("ENABLE_TX", "no", "yes") == "yes"
 
 	if dictionary.Backend = os.Getenv("BACKENDAPI_ADDR"); dictionary.Backend != "" {
 		dictionary.Backend = "http://" + dictionary.Backend
@@ -109,9 +127,9 @@ func main() {
 		info.TypeOfNumber = teldata.NatureOfAddress(t)
 		info.NumberingPlan = teldata.NumberingPlan(n)
 	}
-	if len(frontend) != 0 && len(dictionary.Backend) != 0 {
+	if len(dictionary.Backend) != 0 && enableTx {
 		info.BindType = smpp.TRxBind
-	} else if len(frontend) != 0 {
+	} else if enableTx {
 		info.BindType = smpp.TxBind
 	} else if len(dictionary.Backend) != 0 {
 		info.BindType = smpp.RxBind
@@ -127,7 +145,7 @@ func main() {
 		}
 	}
 
-	dsts := []*net.TCPAddr{}
+	// dsts := []*net.TCPAddr{}
 	for i := range 10 {
 		a := os.Getenv(fmt.Sprintf("PEER_ADDR%d", i))
 		if a == "" {
@@ -142,7 +160,7 @@ func main() {
 			dsts = append(dsts, a)
 		}
 	}
-	binds := make([]*smpp.Bind, len(dsts))
+	binds = make([]*smpp.Bind, len(dsts))
 
 	if info.BindType != smpp.RxBind {
 		http.HandleFunc("POST /smppmsg/v1/data",
@@ -154,6 +172,8 @@ func main() {
 				handleHTTP(w, r, &smpp.SubmitSM{}, binds)
 			})
 	}
+	http.HandleFunc("GET /metrics", metricsHandler)
+
 	if len(frontend) != 0 {
 		log.Println("[INFO]", "listening HTTP...")
 		go func() {
@@ -175,8 +195,7 @@ func main() {
 					closer <- cl
 				}
 
-				binds[i] = &smpp.Bind{BindInfo: info}
-				log.Println("[INFO]", "bind", i, ": connecting SMPP", binds[i].BindType, "bind to", dsts[i])
+				log.Println("[INFO]", "bind", i, ": connecting SMPP", info.BindType, "bind to", dsts[i])
 				var c net.Conn
 				var e error
 				if c, e = net.DialTCP("tcp", localAddr, dsts[i]); e != nil {
@@ -192,6 +211,7 @@ func main() {
 				}
 
 				if cl := <-closer; cl != nil {
+					binds[i] = &smpp.Bind{BindInfo: info}
 					cl[dsts[i]] = binds[i].Close
 					closer <- cl
 				} else {
@@ -216,45 +236,52 @@ func main() {
 
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
-	if call := <-sigc; call != nil {
-		log.Println("[INFO]", "closing binds")
-		cl := <-closer
-		for _, v := range cl {
-			v()
-		}
-		closer <- nil
+	<-sigc
 
-		for w := true; w; {
-			w = false
-			for _, b := range binds {
-				if b != nil {
-					w = true
-					time.Sleep(time.Millisecond * 100)
-				}
+	log.Println("[INFO]", "interrupted, closing binds")
+	time.AfterFunc(time.Second*30, func() {
+		log.Fatalln("[ERROR]", "closing timeout, forcefully stopped")
+	})
+
+	cl := <-closer
+	for _, v := range cl {
+		v()
+	}
+	closer <- nil
+
+	for w := true; w; {
+		w = false
+		for _, b := range binds {
+			if b != nil {
+				w = true
+				time.Sleep(time.Millisecond * 100)
 			}
 		}
 	}
+
 	dictionary.Client.CloseIdleConnections()
 	log.Println("[INFO]", "server stopped")
 }
 
 func handleHTTP(w http.ResponseWriter, r *http.Request, req smpp.PDU, b []*smpp.Bind) {
-	offset := rand.Intn(len(b))
-	if b[offset] != nil && b[offset].IsActive() {
-		dictionary.HandleHTTP(w, r, req, b[offset])
-		return
-	}
-
-	for i := offset + 1; i < len(b); i++ {
-		if b[i] != nil && b[i].IsActive() {
-			dictionary.HandleHTTP(w, r, req, b[i])
+	if len(b) > 0 {
+		offset := rand.Intn(len(b))
+		if b[offset] != nil && b[offset].IsActive() {
+			dictionary.HandleHTTP(w, r, req, b[offset])
 			return
 		}
-	}
-	for i := 0; i < offset; i++ {
-		if b[i] != nil && b[i].IsActive() {
-			dictionary.HandleHTTP(w, r, req, b[i])
-			return
+
+		for i := offset + 1; i < len(b); i++ {
+			if b[i] != nil && b[i].IsActive() {
+				dictionary.HandleHTTP(w, r, req, b[i])
+				return
+			}
+		}
+		for i := range offset {
+			if b[i] != nil && b[i].IsActive() {
+				dictionary.HandleHTTP(w, r, req, b[i])
+				return
+			}
 		}
 	}
 

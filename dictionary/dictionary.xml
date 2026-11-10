@@ -28,7 +28,7 @@
     <enum value="7">FLEX/ReFLEX</enum>
     <enum value="8">CellBroadcast</enum>
 </parameter>
-<parameter name="dest_telematics_id" id="0008" type="Integet2" />
+<parameter name="dest_telematics_id" id="0008" type="Integer2" />
 <parameter name="source_addr_subunit" id="000D" type="Enumerated">
     <enum value="0">Unknown</enum>
     <enum value="1">MS Display</enum>
@@ -58,7 +58,7 @@
     <enum value="7">FLEX/ReFLEX</enum>
     <enum value="8">CellBroadcast</enum>
 </parameter>
-<parameter name="source_telematics_id" id="0010" type="Integet2" />
+<parameter name="source_telematics_id" id="0010" type="Integer2" />
 <parameter name="qos_time_to_live" id="0017" type="Integer4" />
 <parameter name="payload_type" id="0019" type="Enumerated">
     <enum value="0">Default</enum>

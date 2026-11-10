@@ -152,7 +152,7 @@ func (m *messagingMode) UnmarshalJSON(b []byte) (e error) {
 		*m = Datagram
 	case "forward":
 		*m = Forward
-	case "store_and_frward":
+	case "store_and_forward":
 		*m = StoreAndForward
 	default:
 		e = errors.New("invalid Messaging Mode: " + s)

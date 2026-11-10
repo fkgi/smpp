@@ -16,7 +16,6 @@ import (
 
 	"github.com/fkgi/smpp"
 	"github.com/fkgi/smpp/dictionary"
-	"github.com/fkgi/teldata"
 )
 
 func printHelp() {
@@ -40,14 +39,14 @@ func main() {
 	id := flag.String("s", smpp.ID, "System ID")
 	lh := flag.String("i", ":8080", "HTTP local address")
 	ph := flag.String("b", "", "HTTP backend address")
-	pw := flag.String("p", "", "Password for ESME authentication")
-	st := flag.String("y", "DEBUGGER", "Type of ESME system")
-	tn := flag.Uint("o", 0, "Type of Number for ESME address")
-	np := flag.Uint("n", 0, "Numbering Plan Indicator for ESME address")
-	ar := flag.String("a", "", "UNIX Regular Expression notation of ESME address")
+	//pw := flag.String("p", "", "Password for ESME authentication")
+	//st := flag.String("y", "DEBUGGER", "Type of ESME system")
+	//tn := flag.Uint("o", 0, "Type of Number for ESME address")
+	//np := flag.Uint("n", 0, "Numbering Plan Indicator for ESME address")
+	//ar := flag.String("a", "", "UNIX Regular Expression notation of ESME address")
 	cr := flag.String("c", "", "TLS crt file")
 	ky := flag.String("k", "", "TLS key file")
-	dict := flag.String("d", "dictionary.xml", "SMPP dictionary file `path`.")
+	//dict := flag.String("d", "dictionary.xml", "SMPP dictionary file `path`.")
 	help := flag.Bool("h", false, "Print usage")
 	verbose = flag.Bool("v", false, "Verbose log output")
 	flag.Parse()
@@ -58,13 +57,11 @@ func main() {
 	}
 
 	if !*verbose {
-		smpp.TraceMessage = nil
+		smpp.TraceTxMessage = nil
+		smpp.TraceRxMessage = nil
 	}
 
-	log.Println("[INFO]", "loading dictionary file", *dict)
-	if data, e := os.ReadFile(*dict); e != nil {
-		log.Fatalln("[ERROR]", "failed to open dictionary file:", e)
-	} else if dicData, e := dictionary.LoadDictionary(data); e != nil {
+	if dicData, e := dictionary.LoadDictionary(nil); e != nil {
 		log.Fatalln("[ERROR]", "failed to read dictionary file:", e)
 	} else {
 		buf := new(strings.Builder)
@@ -87,11 +84,13 @@ func main() {
 
 	bind := smpp.Bind{}
 	bind.BindType = smpp.NilBind
-	bind.Password = *pw
-	bind.SystemType = *st
-	bind.TypeOfNumber = teldata.NatureOfAddress(*tn)
-	bind.NumberingPlan = teldata.NumberingPlan(*np)
-	bind.AddressRange = *ar
+	/*
+		bind.Password = *pw
+		bind.SystemType = *st
+		bind.TypeOfNumber = teldata.NatureOfAddress(*tn)
+		bind.NumberingPlan = teldata.NumberingPlan(*np)
+		bind.AddressRange = *ar
+	*/
 
 	log.Println("[INFO]", "booting Round-Robin diagnostic/debug subsystem for SMPP...")
 	log.Println("[INFO]", "running as SMSC\n| system ID:", *id)

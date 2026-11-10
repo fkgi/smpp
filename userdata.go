@@ -59,6 +59,10 @@ func (u *UserData) unmarshal(ud []byte, dc byte, h bool) {
 			l--
 		}
 
+		if len(ud) < int(ud[0]+1) {
+			return
+		}
+
 		u.UDH = []UserDataHdr{}
 		for buf := bytes.NewBuffer(ud[1 : ud[0]+1]); buf.Len() != 0; {
 			k, _ := buf.ReadByte()
